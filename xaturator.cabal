@@ -26,8 +26,10 @@ executable xaturator
   -- .hs or .lhs file containing the Main module.
   main-is:             Main.hs
 
-  other-modules:
-    Configuration
+  other-modules:       Configuration
+                     , App
+                     , AppM
+                     , Repos
   
   -- LANGUAGE extensions used by modules in this package.
   -- other-extensions:
@@ -35,7 +37,10 @@ executable xaturator
   -- Other library packages from which modules are imported.
   build-depends:       base >=4.14.3.0 
                      , aeson
+                     , hedis
+                     , string-conversions
                      , bytestring
+                     , resource-pool
                      , containers
                      , http-api-data
                      , http-types
