@@ -1,18 +1,24 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FlexibleContexts #-}
-module Main ( main ) where
+{-# LANGUAGE TypeOperators #-}
+
+module Main (main) where
 
 import App (theApplicationWithSettings)
-import Configuration.Dotenv (loadFile, defaultConfig)
-import Network.Wai.Logger (withStdoutLogger)
+import Configuration.Dotenv (defaultConfig, loadFile)
 import Network.Wai.Handler.Warp
-    (setLogger, setPort, getPort, runSettings, defaultSettings )
+  ( defaultSettings,
+    getPort,
+    runSettings,
+    setLogger,
+    setPort,
+  )
+import Network.Wai.Logger (withStdoutLogger)
 import System.Environment (lookupEnv)
 
 main :: IO ()
