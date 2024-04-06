@@ -34,12 +34,11 @@ import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Database.Redis as R
 import Servant
-import Servant.Server
-
 import Servant.HTML.Blaze
-import qualified Text.Blaze.Html5   as H
-import qualified Text.Blaze.Html5.Attributes      as HA
+import Servant.Server
 import Text.Blaze.Html5 (ToMarkup, (!))
+import qualified Text.Blaze.Html5 as H
+import qualified Text.Blaze.Html5.Attributes as HA
 
 type API = "books" :> (Get '[HTML] Homepage)
 
@@ -53,7 +52,8 @@ instance ToMarkup Homepage where
     H.body $ do
       H.h1 "OpenID Connect Servant Example"
       H.div $
-        H.a ! HA.href "/login" $ "Click here to login"
+        H.a ! HA.href "/login" $
+          "Click here to login"
       H.ul $ do
         H.li $ do
           H.span "API Key in Local storage: "
@@ -74,11 +74,3 @@ server = getBooks
 
 getBooks :: (MonadError ServerError m, MonadIO m, MonadDB m, MonadReader r m, HasConfiguration r) => m Homepage
 getBooks = pure Homepage
-
-
-
-
-
-
-
-

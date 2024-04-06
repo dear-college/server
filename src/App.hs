@@ -3,10 +3,10 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE RecordWildCards #-}
 
 module App
   ( api,
@@ -16,24 +16,21 @@ module App
   )
 where
 
-import AppM (AppCtx (..),
-             AppM (..),
-             HasConfiguration (..),
-             HasOidcEnvironment (..),
-              MonadDB (..),
-              HasJwtSettings (..),
-              HasCookieSettings (..)    )
+import AppM
+  ( AppCtx (..),
+    AppM (..),
+    HasConfiguration (..),
+    HasCookieSettings (..),
+    HasJwtSettings (..),
+    HasOidcEnvironment (..),
+    MonadDB (..),
+  )
 import Configuration
   ( Configuration (getHostname),
     defaultConfiguration,
     updateGithubAccessToken,
     updateGithubRoot,
     updateHostname,
-  )
-import OIDC.Types
-  ( OIDCConf(..)
-  , initOIDC
-  , genRandomBS
   )
 import Configuration.Dotenv (defaultConfig, loadFile)
 import Control.Concurrent (forkIO, killThread)
@@ -44,8 +41,8 @@ import Control.Concurrent.STM.TVar
     writeTVar,
   )
 import Control.Exception (bracket)
-import Control.Monad.Catch
 import Control.Monad (void)
+import Control.Monad.Catch
 import Control.Monad.Except
 import Control.Monad.Except (liftEither, runExceptT, throwError)
 import Control.Monad.IO.Class
@@ -54,8 +51,12 @@ import Control.Monad.Reader
 import Control.Monad.STM (atomically)
 import Control.Monad.Trans.Reader (ReaderT, ask, asks, runReaderT)
 import Control.Monad.Trans.State (StateT, runStateT)
+import Crypto.JOSE.JWK (JWK)
+import qualified Crypto.JOSE.JWK as Jose
+import Crypto.JOSE.Types (Base64Octets (..))
 import Data.Aeson
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Base64.URL as B64URL
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.Map as Map
 import Data.Pool (Pool, createPool, withResource)
@@ -71,18 +72,16 @@ import Network.Wai.Handler.Warp
     setLogger,
     setPort,
   )
-  
-import qualified Repos
 import qualified OIDC
-
-import Crypto.JOSE.JWK (JWK)
-import qualified Crypto.JOSE.JWK as Jose
-import qualified Data.ByteString.Base64.URL as B64URL
-import Crypto.JOSE.Types (Base64Octets(..))
-
+import OIDC.Types
+  ( OIDCConf (..),
+    genRandomBS,
+    initOIDC,
+  )
+import qualified Repos
 import Servant
-import Servant.Server
 import Servant.Auth.Server as SAS
+import Servant.Server
 import System.Environment (lookupEnv)
 
 type TheAPI = Repos.API :<|> OIDC.API
@@ -119,9 +118,14 @@ appWithContext ctx = do
   withResource pool $ \conn -> do
     let cookies = defaultCookieSettings
     let cfg = conn :. jwtCfg :. cookies :. EmptyContext
-    let ctx' = ctx { _jwtSettings = jwtCfg, _cookieSettings = cookies }
-    pure $ serveWithContext api cfg $ hoistServerWithContext api
-      (Proxy :: Proxy '[R.Connection, SAS.CookieSettings, SAS.JWTSettings]) (nt ctx) server
+    let ctx' = ctx {_jwtSettings = jwtCfg, _cookieSettings = cookies}
+    pure $
+      serveWithContext api cfg $
+        hoistServerWithContext
+          api
+          (Proxy :: Proxy '[R.Connection, SAS.CookieSettings, SAS.JWTSettings])
+          (nt ctx)
+          server
 
 -- | Generate a key suitable for use with 'defaultConfig' using file contents
 generateKeyFromFile :: String -> IO JWK
@@ -152,10 +156,11 @@ theApplicationWithSettings settings = do
   let oidcConf = OIDCConf <$> googleRedirectUri <*> googleClientId <*> googleClientSecret
   oidcEnv <- maybe (error "Missing GOOGLE_* in .env") initOIDC oidcConf
 
-  let config = updateGithubRoot root $
-               updateGithubAccessToken accessToken $
-               updateHostname hostname $
-               defaultConfiguration
+  let config =
+        updateGithubRoot root $
+          updateGithubAccessToken accessToken $
+            updateHostname hostname $
+              defaultConfiguration
 
   putStrLn $ "Listening on port " ++ show (getPort settings)
 

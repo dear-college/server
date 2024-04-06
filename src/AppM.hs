@@ -17,39 +17,38 @@ module AppM
     HasConfiguration (..),
     HasOidcEnvironment (..),
     HasJwtSettings (..),
-    HasCookieSettings (..)    
+    HasCookieSettings (..),
   )
 where
 
 import Configuration
   ( Configuration (getHostname),
   )
+import Control.Monad.Catch (MonadCatch, MonadThrow (..), catch)
 import Control.Monad.Except
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Reader
 import Control.Monad.State
-import Control.Monad.Catch (MonadCatch, MonadThrow(..), catch)
 import Control.Monad.Trans.Reader (ReaderT, runReaderT)
+import Crypto.JOSE
 import Data.ByteString
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Pool (Pool, withResource)
 import qualified Database.Redis as R
 import Network.Wai.Handler.Warp
+import OIDC.Types (OIDCEnv (..))
+import Servant.Auth.Server
 import Servant.Server
-import OIDC.Types ( OIDCEnv(..) )
 import Web.OIDC.Client.Types (SessionStore)
 
-import Crypto.JOSE
-import Servant.Auth.Server
-
 data AppCtx = AppCtx
-  { _getConfiguration :: Configuration
-  , getPool :: Pool R.Connection
-  , _getOidcEnvironment :: OIDCEnv
-  , _getSymmetricJWK :: JWK
-  , _jwtSettings :: JWTSettings
-  , _cookieSettings :: CookieSettings
+  { _getConfiguration :: Configuration,
+    getPool :: Pool R.Connection,
+    _getOidcEnvironment :: OIDCEnv,
+    _getSymmetricJWK :: JWK,
+    _jwtSettings :: JWTSettings,
+    _cookieSettings :: CookieSettings
   }
 
 type Key = ByteString
@@ -63,7 +62,7 @@ class MonadDB m where
   rset :: Key -> ByteString -> m (Either R.Reply R.Status)
   rsetex :: Key -> Integer -> ByteString -> m (Either R.Reply R.Status)
   rexists :: Key -> m (Either R.Reply Bool)
-  expire :: Key -> Integer -> m (Either R.Reply Bool)  
+  expire :: Key -> Integer -> m (Either R.Reply Bool)
   zadd :: Key -> Double -> Field -> m (Either R.Reply Integer)
   zscore :: Key -> Field -> m (Either R.Reply (Maybe Double))
   setex :: Key -> Integer -> ByteString -> m (Either R.Reply R.Status)
@@ -113,7 +112,7 @@ instance HasCookieSettings AppCtx where
   getCookieSettings = _cookieSettings
 
 instance MonadThrow AppM where
-    throwM = AppM . liftIO . throwM
+  throwM = AppM . liftIO . throwM
 
 instance MonadCatch AppM where
-    catch (AppM m) handler = AppM $ m `catch` (runApp . handler)
+  catch (AppM m) handler = AppM $ m `catch` (runApp . handler)
