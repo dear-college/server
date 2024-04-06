@@ -10,7 +10,8 @@ let
   });
 
   myHaskellPkgsOverlay = (hSelf: hSuper: {
-    xaturator = hSelf.callCabal2nix "xaturator" ./. {};
+    dear-college = hSelf.callCabal2nix "dear-college" ./. {};
+    servant-auth-server = myNixPkgs.haskell.lib.dontCheck (hSelf.callHackage "servant-auth-server" "0.4.8.0" { });
   });
   
   myDevTools = with myNixPkgs; [
@@ -24,7 +25,7 @@ let
     alias repl="cabal new-repl"
   '';
 in
-myNixPkgs.myHaskellPackages.xaturator.env.overrideAttrs (oldEnv: {
+myNixPkgs.myHaskellPackages.dear-college.env.overrideAttrs (oldEnv: {
   nativeBuildInputs = oldEnv.nativeBuildInputs ++ myDevTools;
   shellHook = myShellHook;
 })
