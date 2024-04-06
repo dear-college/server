@@ -1,9 +1,11 @@
 module Configuration where
 
+import qualified Data.ByteString as BS
+
 data Configuration = Configuration
-  { githubRoot :: String,
-    githubAccessToken :: String,
-    getHostname :: String
+  { githubRoot :: String
+  , githubAccessToken :: String
+  , getHostname :: String
   }
   deriving (Show)
 

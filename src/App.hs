@@ -6,6 +6,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module App
   ( api,
@@ -15,13 +16,24 @@ module App
   )
 where
 
-import AppM (AppCtx (..), AppM (..), HasConfiguration (..), MonadDB (..))
+import AppM (AppCtx (..),
+             AppM (..),
+             HasConfiguration (..),
+             HasOidcEnvironment (..),
+              MonadDB (..),
+              HasJwtSettings (..),
+              HasCookieSettings (..)    )
 import Configuration
   ( Configuration (getHostname),
     defaultConfiguration,
     updateGithubAccessToken,
     updateGithubRoot,
     updateHostname,
+  )
+import OIDC.Types
+  ( OIDCConf(..)
+  , initOIDC
+  , genRandomBS
   )
 import Configuration.Dotenv (defaultConfig, loadFile)
 import Control.Concurrent (forkIO, killThread)
@@ -32,6 +44,7 @@ import Control.Concurrent.STM.TVar
     writeTVar,
   )
 import Control.Exception (bracket)
+import Control.Monad.Catch
 import Control.Monad (void)
 import Control.Monad.Except
 import Control.Monad.Except (liftEither, runExceptT, throwError)
@@ -58,12 +71,21 @@ import Network.Wai.Handler.Warp
     setLogger,
     setPort,
   )
+  
 import qualified Repos
+import qualified OIDC
+
+import Crypto.JOSE.JWK (JWK)
+import qualified Crypto.JOSE.JWK as Jose
+import qualified Data.ByteString.Base64.URL as B64URL
+import Crypto.JOSE.Types (Base64Octets(..))
+
 import Servant
 import Servant.Server
+import Servant.Auth.Server as SAS
 import System.Environment (lookupEnv)
 
-type TheAPI = Repos.API
+type TheAPI = Repos.API :<|> OIDC.API
 
 -- Repos.API :<|>
 
@@ -71,25 +93,43 @@ api :: Proxy TheAPI
 api = Proxy
 
 server ::
-  ( MonadIO m, -- MonadDB m,
+  ( MonadIO m,
+    MonadDB m,
     MonadReader r m,
     HasConfiguration r,
-    MonadError ServerError m
+    HasOidcEnvironment r,
+    HasJwtSettings r,
+    HasCookieSettings r,
+    MonadError ServerError m,
+    MonadCatch m
   ) =>
   ServerT TheAPI m
-server = Repos.server
+server = Repos.server :<|> OIDC.server
 
 -- User.server :<|>
 
-nt :: AppCtx -> AppM a -> Handler a
+nt :: AppCtx -> AppM a -> Servant.Server.Handler a
 nt s x = runReaderT (runApp x) s
 
 appWithContext :: AppCtx -> IO Application
 appWithContext ctx = do
   let pool = getPool ctx
+      myKey = _getSymmetricJWK ctx
+      jwtCfg = defaultJWTSettings myKey
   withResource pool $ \conn -> do
-    let cfg = conn :. EmptyContext
-    pure $ serveWithContext api cfg $ hoistServerWithContext api (Proxy :: Proxy '[R.Connection]) (nt ctx) server
+    let cookies = defaultCookieSettings
+    let cfg = conn :. jwtCfg :. cookies :. EmptyContext
+    let ctx' = ctx { _jwtSettings = jwtCfg, _cookieSettings = cookies }
+    pure $ serveWithContext api cfg $ hoistServerWithContext api
+      (Proxy :: Proxy '[R.Connection, SAS.CookieSettings, SAS.JWTSettings]) (nt ctx) server
+
+-- | Generate a key suitable for use with 'defaultConfig' using file contents
+generateKeyFromFile :: String -> IO JWK
+generateKeyFromFile filename = do
+  keyContents <- BS.readFile filename
+  let keyContentsEncoded = B64URL.encode keyContents
+  let keyParams = Jose.OctKeyMaterial . Jose.OctKeyParameters . Base64Octets $ keyContentsEncoded
+  return $ Jose.fromKeyMaterial keyParams
 
 theApplicationWithSettings :: Settings -> IO Application
 theApplicationWithSettings settings = do
@@ -98,9 +138,24 @@ theApplicationWithSettings settings = do
 
   hostname <- lookupEnv "HOSTNAME"
 
+  symmetricKeyFilename <- lookupEnv "SYMMETRIC_KEY"
+  symmetricJwk <- maybe (error "Expected the file $SYMMETRIC_KEY to contain symmetric key material") generateKeyFromFile symmetricKeyFilename
+
   root <- lookupEnv "GITHUB_ROOT"
   accessToken <- lookupEnv "GITHUB_ACCESS_TOKEN"
-  let config = updateGithubRoot root $ updateGithubAccessToken accessToken $ updateHostname hostname $ defaultConfiguration
+
+  let packLookupEnv x = fmap C8.pack <$> lookupEnv x
+  googleClientId <- packLookupEnv "GOOGLE_CLIENT_ID"
+  googleClientSecret <- packLookupEnv "GOOGLE_CLIENT_SECRET"
+  googleRedirectUri <- packLookupEnv "GOOGLE_REDIRECT_URI"
+
+  let oidcConf = OIDCConf <$> googleRedirectUri <*> googleClientId <*> googleClientSecret
+  oidcEnv <- maybe (error "Missing GOOGLE_* in .env") initOIDC oidcConf
+
+  let config = updateGithubRoot root $
+               updateGithubAccessToken accessToken $
+               updateHostname hostname $
+               defaultConfiguration
 
   putStrLn $ "Listening on port " ++ show (getPort settings)
 
@@ -124,6 +179,6 @@ theApplicationWithSettings settings = do
       50 -- maximum number of connections
   conn <- either error R.checkedConnect connectInfo
 
-  let context = AppCtx {_getConfiguration = config, getPool = pool}
+  let context = AppCtx {_getConfiguration = config, getPool = pool, _getSymmetricJWK = symmetricJwk, _getOidcEnvironment = oidcEnv}
 
   appWithContext context
