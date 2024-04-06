@@ -1,19 +1,40 @@
-# The Xaturator
+# dear.college
 
-The Ximera Xloud depends on being able to get .tex files, including
-.tex files which have been compiled into .dvi for xourses.  The
-Xaturator is the server which, sitting in front of GitHub, facilitates
-this.
+anyone who visits is invited to log in with a (social) login
+
+https://dear.college/course
+
+first time someone visits, get the "results" code and associate logged in user as the "owner"
+
+https://dear.college/course/results-code
+
+https://dear.college/course/https://external.tool/
+
+The 256-byte file `key.bin` is used as a symmetric key for the JWTs.
+
+## Redirect flow
+
+Suppose the user already has a `dear.college` cookie.  Then when that user visits
+
+https://dear.college/slug/https://external.tool/
+
+they are directed to https://external.tool/#jwt-scoped-to-external-tool
+
+Since `external.tool` is running our JavaScript, the page looks for
+the JWT stored in the URL hash, and decodes it.
+
+The `aud` in the JWT will be https://api.dear.college
+
+The `scp` in the JWT will be ["https://external.tool/"]
+
+The `sub` claim identifies the user.
 
 ## API
 
-### GET /api/repos/:owner/:repo
+### GET https://api.dear.college/users/:user
 
-that will provide the 'default branch'
-which then can be queried with
+Returns information about the :user.
 
-### GET /api/repos/:owner/:repo/commits/main
+Requires a JWT with a `sub` claim equal to `user`.
 
-to get the most recent commit.
-
-### GET /api/repos/:owner/:repo/files/:path
+### GET https://api.dear.college/users/:user
