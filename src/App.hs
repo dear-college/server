@@ -59,7 +59,7 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base64.URL as B64URL
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.Map as Map
-import Data.Pool (Pool, createPool, withResource)
+import Data.Pool (Pool, defaultPoolConfig, newPool, withResource)
 import Data.String.Conversions (cs)
 import Data.Text (Text)
 import qualified Database.Redis as R
@@ -105,8 +105,6 @@ server ::
   ServerT TheAPI m
 server = Repos.server :<|> OIDC.server
 
--- User.server :<|>
-
 nt :: AppCtx -> AppM a -> Servant.Server.Handler a
 nt s x = runReaderT (runApp x) s
 
@@ -124,7 +122,7 @@ appWithContext ctx = do
         hoistServerWithContext
           api
           (Proxy :: Proxy '[R.Connection, SAS.CookieSettings, SAS.JWTSettings])
-          (nt ctx)
+          (nt ctx')
           server
 
 -- | Generate a key suitable for use with 'defaultConfig' using file contents
@@ -175,13 +173,13 @@ theApplicationWithSettings settings = do
         Left e -> error e
         Right c -> c
 
-  pool <-
-    createPool
-      (R.checkedConnect connectInfo') -- creating connection
-      (\conn -> void $ R.runRedis conn R.quit) -- clean-up action
-      1 -- number of sub-pools
-      60 -- how long in seconds to keep unused connections open
-      50 -- maximum number of connections
+  let poolConfig = defaultPoolConfig
+        (R.checkedConnect connectInfo') -- creating connection
+        (\conn -> void $ R.runRedis conn R.quit) -- clean-up action
+        60 -- how long in seconds to keep unused connections open
+        50 -- maximum number of connections  
+  
+  pool <- newPool poolConfig
   conn <- either error R.checkedConnect connectInfo
 
   let context = AppCtx {_getConfiguration = config, getPool = pool, _getSymmetricJWK = symmetricJwk, _getOidcEnvironment = oidcEnv}
