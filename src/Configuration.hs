@@ -1,11 +1,12 @@
 module Configuration where
 
 import qualified Data.ByteString as BS
+import Network.URI (URI (..))
 
 data Configuration = Configuration
   { githubRoot :: String,
     githubAccessToken :: String,
-    getHostname :: String
+    getRootURI :: URI
   }
   deriving (Show)
 
@@ -24,6 +25,6 @@ updateGithubAccessToken :: Maybe String -> Configuration -> Configuration
 updateGithubAccessToken (Just s) config = config {githubAccessToken = s}
 updateGithubAccessToken Nothing config = config
 
-updateHostname :: Maybe String -> Configuration -> Configuration
-updateHostname (Just s) config = config {getHostname = s}
-updateHostname Nothing config = config
+updateRootURI :: Maybe URI -> Configuration -> Configuration
+updateRootURI (Just s) config = config {getRootURI = s}
+updateRootURI Nothing config = config

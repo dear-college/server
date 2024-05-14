@@ -8,6 +8,9 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE InstanceSigs #-}
 
 module OIDC (API (..), server) where
 
@@ -19,6 +22,7 @@ import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader
 import Data.Aeson
   ( FromJSON (..),
+    ToJSON (..),
     (.:),
   )
 import qualified Data.Aeson as JSON
@@ -63,6 +67,12 @@ import Web.OIDC.Client.Tokens
     validateIdToken,
   )
 import Web.OIDC.Client.Types (Code, SessionStore (..), State)
+
+import Crypto.JWT (HasClaimsSet(..), ClaimsSet, emptyClaimsSet, NumericDate (..), Audience (..), stringOrUri, StringOrURI(..) )
+import Control.Lens
+import Network.URI (parseURI, parseURIReference, uriPath, relativeTo, uriToString)
+import Data.Time.Clock (getCurrentTime, UTCTime, addUTCTime)
+import Configuration (getRootURI)
 
 instance FromHttpApiData C8.ByteString where
   parseUrlPiece = Right . C8.pack . Data.Text.unpack
@@ -165,6 +175,30 @@ instance FromJSON OtherClaims where
       <*> v .: "name"
       <*> v .: "email_verified"
 
+-- Tokens OtherClaims -> Session
+
+-- Thanks to https://nicolasurquiola.ar/blog/2023-10-28-generalised-auth-with-jwt-in-servant
+newtype SessionClaims = SessionClaims ClaimsSet
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (FromJSON, ToJSON, ToJWT)
+
+instance HasClaimsSet SessionClaims where
+  claimsSet :: Lens' SessionClaims ClaimsSet
+  claimsSet f (SessionClaims claims) = SessionClaims <$> f claims
+
+sessionClaims :: URI -> Tokens OtherClaims -> Maybe SessionClaims
+sessionClaims uri tokens = do
+  let claims = otherClaims $ idToken tokens
+  issuer <- parseURI $ Data.Text.unpack $ iss $ idToken tokens
+  subscriber <- parseURIReference $ Data.Text.unpack $ sub $ idToken tokens
+  let subAndIss = subscriber `relativeTo` issuer
+  subAndIss' <- preview stringOrUri $ uriToString id subAndIss ""
+  audience <- preview stringOrUri $ uriToString id uri ""
+  pure $ emptyClaimsSet
+     & claimSub ?~ subAndIss'
+     & claimAud ?~ Audience [audience]
+     & SessionClaims
+
 handleLoggedIn ::
   ( MonadIO m,
     MonadDB m,
@@ -187,13 +221,29 @@ handleLoggedIn ::
   m String
 handleLoggedIn handleSuccessfulId err mcode mstate = do
   oidcenv <- asks getOidcEnvironment
+  jwtSettings <- asks getJwtSettings
+  cookieSettings <- asks getCookieSettings  
   state <- maybe (forbidden "Missing state") pure mstate
   code <- maybe (forbidden "Missing code") pure mcode
+
+  issuedAt <- liftIO getCurrentTime
+  let expireAt = addUTCTime 900 issuedAt
+
+  audience <- asks (getRootURI . getConfiguration)
+
   case err of
     Just errorMsg -> forbidden errorMsg
     Nothing -> do
       tokens <- O.getValidTokens sessionStore (oidc oidcenv) (mgr oidcenv) state code :: (MonadIO m, MonadDB m, MonadCatch m) => m (Tokens OtherClaims)
-      return $ show (idToken tokens)
+      let maybeClaims = sessionClaims audience tokens
+      case maybeClaims of
+        Nothing -> forbidden "Missing JWT"
+        Just claims -> do
+          mJWT <- liftIO $ makeJWT claims jwtSettings (Just expireAt)
+          case mJWT of
+            Left errorMsg -> forbidden $ Data.Text.pack $ show errorMsg
+            Right jwt -> do
+              return $ show jwt
 
 -- case err of
 --   Just errorMsg -> forbidden errorMsg

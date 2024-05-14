@@ -22,7 +22,7 @@ module AppM
 where
 
 import Configuration
-  ( Configuration (getHostname),
+  ( Configuration (..),
   )
 import Control.Monad.Catch (MonadCatch, MonadThrow (..), catch)
 import Control.Monad.Except

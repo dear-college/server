@@ -19,8 +19,7 @@ where
 import AppM (AppM, HasConfiguration (..), MonadDB (..), getConfiguration, getPool)
 import Configuration
 import Control.Applicative
-import Control.Monad.Except
-import Control.Monad.Except (liftEither, runExceptT, throwError)
+import Control.Monad.Except (liftEither, runExceptT, throwError, MonadError)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader
 import Data.Aeson

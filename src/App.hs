@@ -26,11 +26,11 @@ import AppM
     MonadDB (..),
   )
 import Configuration
-  ( Configuration (getHostname),
+  ( Configuration (getRootURI),
     defaultConfiguration,
     updateGithubAccessToken,
     updateGithubRoot,
-    updateHostname,
+    updateRootURI,
   )
 import Configuration.Dotenv (defaultConfig, loadFile)
 import Control.Concurrent (forkIO, killThread)
@@ -83,6 +83,7 @@ import Servant
 import Servant.Auth.Server as SAS
 import Servant.Server
 import System.Environment (lookupEnv)
+import Network.URI (URI (..), parseURI)
 
 type TheAPI = Repos.API :<|> OIDC.API
 
@@ -114,7 +115,7 @@ appWithContext ctx = do
       myKey = _getSymmetricJWK ctx
       jwtCfg = defaultJWTSettings myKey
   withResource pool $ \conn -> do
-    let cookies = defaultCookieSettings
+    let cookies = defaultCookieSettings { cookieXsrfSetting = Nothing }
     let cfg = conn :. jwtCfg :. cookies :. EmptyContext
     let ctx' = ctx {_jwtSettings = jwtCfg, _cookieSettings = cookies}
     pure $
@@ -138,7 +139,8 @@ theApplicationWithSettings settings = do
   -- with this, lookupEnv will fetch from .env or from an environment variable
   _ <- Configuration.Dotenv.loadFile Configuration.Dotenv.defaultConfig
 
-  hostname <- lookupEnv "HOSTNAME"
+  rootURI' <- lookupEnv "ROOT_URL"
+  rootURI <- maybe (error "Could not parse $ROOT_URL") (pure . parseURI) rootURI'
 
   symmetricKeyFilename <- lookupEnv "SYMMETRIC_KEY"
   symmetricJwk <- maybe (error "Expected the file $SYMMETRIC_KEY to contain symmetric key material") generateKeyFromFile symmetricKeyFilename
@@ -157,7 +159,7 @@ theApplicationWithSettings settings = do
   let config =
         updateGithubRoot root $
           updateGithubAccessToken accessToken $
-            updateHostname hostname $
+            updateRootURI rootURI $
               defaultConfiguration
 
   putStrLn $ "Listening on port " ++ show (getPort settings)
@@ -177,8 +179,8 @@ theApplicationWithSettings settings = do
         (R.checkedConnect connectInfo') -- creating connection
         (\conn -> void $ R.runRedis conn R.quit) -- clean-up action
         60 -- how long in seconds to keep unused connections open
-        50 -- maximum number of connections  
-  
+        50 -- maximum number of connections
+
   pool <- newPool poolConfig
   conn <- either error R.checkedConnect connectInfo
 

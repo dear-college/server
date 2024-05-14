@@ -72,6 +72,8 @@ executable dear-college
                      , transformers
                      , wai
                      , warp
+                     , network-uri
+                     , time
 
   -- Directories containing source files.
   hs-source-dirs:      src
