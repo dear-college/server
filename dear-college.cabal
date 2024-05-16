@@ -32,6 +32,10 @@ executable dear-college
                      , OIDC
                      , OIDC.Types
                      , Repos
+                     , Views.A11y
+                     , Views.Branding
+                     , Views.Header
+                     , Views.Footer
   
   -- LANGUAGE extensions used by modules in this package.
   -- other-extensions:
