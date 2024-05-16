@@ -39,6 +39,7 @@ import qualified Text.Blaze.Html5.Attributes as HA
 
 import Text.Blaze.Html5 (customAttribute)
 import Control.Monad (replicateM_)
+import Network.URI (uriToString)
 
 ariaControls :: H.AttributeValue -> H.Attribute
 ariaControls = customAttribute "aria-controls"
@@ -54,6 +55,9 @@ ariaDisabled = customAttribute "aria-disabled"
 xlinkHref = customAttribute "xlink:href"
 
 type API = "books" :> (Get '[HTML] Homepage) :<|> "sample" :> (Get '[HTML] H.Html)
+
+applicationName :: Text
+applicationName = "dear.college"
 
 data Homepage = Homepage
 
@@ -89,10 +93,14 @@ getBooks :: (MonadError ServerError m, MonadIO m, MonadDB m, MonadReader r m, Ha
 getBooks = pure Homepage
 
 partialNavbar :: (MonadError ServerError m, MonadIO m, MonadDB m, MonadReader r m, HasConfiguration r) => m H.Html
-partialNavbar = pure $ do
+partialNavbar = do
+  config <- asks getConfiguration
+  let root :: URI = getRootURI config
+  let root' = uriToString id root ""
+  pure $ do
         H.nav ! HA.class_ "navbar navbar-expand-md navbar-dark fixed-top bg-dark" $ do
             H.div ! HA.class_ "container-fluid" $ do
-                H.a ! HA.class_ "navbar-brand" ! HA.href "#" $ "Fixed navbar"
+                H.a ! HA.class_ "navbar-brand" ! HA.href (H.stringValue root') $ H.toHtml applicationName
                 H.button ! HA.class_ "navbar-toggler" 
                          ! HA.type_ "button" 
                          ! H.dataAttribute "bs-toggle" "collapse" 
@@ -144,8 +152,12 @@ partialFooter = pure $ do
                     H.input ! HA.type_ "text" ! HA.id "newsletter1" ! HA.class_ "form-control" ! HA.placeholder "Email address"
                     H.button ! HA.class_ "btn btn-primary" ! HA.type_ "button" $ "Subscribe"
 
-        H.div ! HA.class_ "d-flex flex-column flex-sm-row justify-content-between py-4 my-4 border-top" $ do
-          H.p "© 2024 Company, Inc. All rights reserved."
+        H.div ! HA.class_ "d-flex flex-column flex-sm-row justify-content-between py-2 my-2 border-top" $ do
+          H.p $ do
+            H.html "© 2024 Jim Fowler; licensed under "
+            H.a ! HA.href "https://www.gnu.org/licenses/agpl-3.0.txt" $ "GNU Affero General Public License v3.0 or later"
+            H.html "."
+
           H.ul ! HA.class_ "list-unstyled d-flex" $ do
             H.li ! HA.class_ "ms-3" $ H.a ! HA.class_ "link-body-emphasis" ! HA.href "#" $ "A"
             H.li ! HA.class_ "ms-3" $ H.a ! HA.class_ "link-body-emphasis" ! HA.href "#" $ "B"
@@ -167,7 +179,7 @@ partialPage title body = do
         H.meta ! HA.name "viewport" ! HA.content "width=device-width, initial-scale=1"
         H.link ! HA.rel "stylesheet" ! HA.type_ "text/css" ! HA.href cssPath
         H.script ! HA.type_ "text/javascript" ! HA.src jsPath $ ""
-        H.title $ H.toHtml title
+        H.title $ H.toHtml (title <> " - " <> applicationName)
       H.body ! HA.class_ "d-flex flex-column h-100" $ do
         H.header $ do
           navbar
