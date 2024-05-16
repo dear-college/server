@@ -5,3 +5,10 @@
 main > .container {
     padding-top: 60px;
 }
+
+// Bootstrap uses rem units for most sizing, which are relative to the
+// root font size set on the <html> element. You can decrease the base
+// font size in your CSS to make everything smaller.
+html {
+    font-size: 14px; /* Default is usually 16px */
+}
