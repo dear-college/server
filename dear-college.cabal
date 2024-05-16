@@ -74,6 +74,8 @@ executable dear-college
                      , warp
                      , network-uri
                      , time
+                     , directory
+                     , filepath
 
   -- Directories containing source files.
   hs-source-dirs:      src

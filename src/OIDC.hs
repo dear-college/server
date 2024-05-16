@@ -74,6 +74,8 @@ import Network.URI (parseURI, parseURIReference, uriPath, relativeTo, uriToStrin
 import Data.Time.Clock (getCurrentTime, UTCTime, addUTCTime)
 import Configuration (getRootURI)
 
+import Servant.Auth.Server.Internal.Cookie (makeSessionCookie)
+
 instance FromHttpApiData C8.ByteString where
   parseUrlPiece = Right . C8.pack . Data.Text.unpack
   parseHeader = Right
@@ -84,7 +86,7 @@ type API =
     :> ( -- redirect User to the OpenID Provider
          Get '[JSON] NoContent
            -- render the page that will save the user creds in the user-agent
-           :<|> ("cb" :> QueryParam "error" Text :> QueryParam "code" Code :> QueryParam "state" State :> Get '[HTML] String)
+           :<|> ("cb" :> QueryParam "error" Text :> QueryParam "code" Code :> QueryParam "state" State :> Get '[HTML] (Headers '[Header "Set-Cookie" SetCookie] String))
        )
 
 redirects :: (MonadError ServerError m) => String -> m ()
@@ -175,8 +177,6 @@ instance FromJSON OtherClaims where
       <*> v .: "name"
       <*> v .: "email_verified"
 
--- Tokens OtherClaims -> Session
-
 -- Thanks to https://nicolasurquiola.ar/blog/2023-10-28-generalised-auth-with-jwt-in-servant
 newtype SessionClaims = SessionClaims ClaimsSet
   deriving stock (Eq, Show, Generic)
@@ -218,7 +218,7 @@ handleLoggedIn ::
   Maybe Code ->
   -- | state
   Maybe State ->
-  m String
+  m (Headers '[Header "Set-Cookie" SetCookie] String)
 handleLoggedIn handleSuccessfulId err mcode mstate = do
   oidcenv <- asks getOidcEnvironment
   jwtSettings <- asks getJwtSettings
@@ -240,10 +240,11 @@ handleLoggedIn handleSuccessfulId err mcode mstate = do
         Nothing -> forbidden "Missing JWT"
         Just claims -> do
           mJWT <- liftIO $ makeJWT claims jwtSettings (Just expireAt)
-          case mJWT of
-            Left errorMsg -> forbidden $ Data.Text.pack $ show errorMsg
-            Right jwt -> do
-              return $ show jwt
+          mSessionCookie <- liftIO $ makeSessionCookie cookieSettings jwtSettings claims
+          case mSessionCookie of
+            Nothing -> forbidden "401 error"
+            Just cookie -> do
+              return $ (addHeader cookie) (show "cookie set")
 
 -- case err of
 --   Just errorMsg -> forbidden errorMsg

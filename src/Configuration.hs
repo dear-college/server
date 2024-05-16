@@ -6,7 +6,9 @@ import Network.URI (URI (..))
 data Configuration = Configuration
   { githubRoot :: String,
     githubAccessToken :: String,
-    getRootURI :: URI
+    getRootURI :: URI,
+    getJavascriptPath :: FilePath,
+    getStylesheetPath :: FilePath
   }
   deriving (Show)
 
@@ -14,7 +16,9 @@ defaultConfiguration :: Configuration
 defaultConfiguration =
   Configuration
     { githubRoot = "http://localhost:4000/github/",
-      githubAccessToken = ""
+      githubAccessToken = "",
+      getJavascriptPath = "main.js",
+      getStylesheetPath = "main.css"
     }
 
 updateGithubRoot :: Maybe String -> Configuration -> Configuration
@@ -28,3 +32,11 @@ updateGithubAccessToken Nothing config = config
 updateRootURI :: Maybe URI -> Configuration -> Configuration
 updateRootURI (Just s) config = config {getRootURI = s}
 updateRootURI Nothing config = config
+
+updateJavascriptPath :: Maybe FilePath -> Configuration -> Configuration
+updateJavascriptPath (Just s) config = config {getJavascriptPath = s}
+updateJavascriptPath Nothing config = config
+
+updateStylesheetPath :: Maybe FilePath -> Configuration -> Configuration
+updateStylesheetPath (Just s) config = config {getStylesheetPath = s}
+updateStylesheetPath Nothing config = config

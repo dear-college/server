@@ -31,6 +31,8 @@ import Configuration
     updateGithubAccessToken,
     updateGithubRoot,
     updateRootURI,
+    updateJavascriptPath,
+    updateStylesheetPath,
   )
 import Configuration.Dotenv (defaultConfig, loadFile)
 import Control.Concurrent (forkIO, killThread)
@@ -85,9 +87,17 @@ import Servant.Server
 import System.Environment (lookupEnv)
 import Network.URI (URI (..), parseURI)
 
-type TheAPI = Repos.API :<|> OIDC.API
+import System.Directory (listDirectory, doesDirectoryExist)
+import System.FilePath ((</>), takeExtension, takeFileName)
+import Control.Monad (filterM)
+import Data.List (find)
+
+type TheAPI = Repos.API :<|> OIDC.API :<|> Raw
 
 -- Repos.API :<|>
+
+assetsDirectory :: FilePath
+assetsDirectory = "frontend/src/dist/assets"
 
 api :: Proxy TheAPI
 api = Proxy
@@ -104,7 +114,14 @@ server ::
     MonadCatch m
   ) =>
   ServerT TheAPI m
-server = Repos.server :<|> OIDC.server
+server = Repos.server :<|> OIDC.server :<|> serveDirectoryWebApp "frontend/src/dist/assets"
+
+-- Find the first file with the given extension in the specified directory
+findFirstFileWithExtension :: FilePath -> String -> IO (Maybe FilePath)
+findFirstFileWithExtension dir ext = do
+  allPaths <- listDirectory dir
+  let files = map (dir </>) allPaths
+  return $ find ((== ext) . takeExtension) files
 
 nt :: AppCtx -> AppM a -> Servant.Server.Handler a
 nt s x = runReaderT (runApp x) s
@@ -156,12 +173,20 @@ theApplicationWithSettings settings = do
   let oidcConf = OIDCConf <$> googleRedirectUri <*> googleClientId <*> googleClientSecret
   oidcEnv <- maybe (error "Missing GOOGLE_* in .env") initOIDC oidcConf
 
+  mJsPath <- findFirstFileWithExtension assetsDirectory ".js"
+  let jsFilename = maybe (error "Could not find .js file in assets") takeFileName mJsPath
+  
+  mCssPath <- findFirstFileWithExtension assetsDirectory ".css"
+  let cssFilename = maybe (error "Could not find .css file in assets") takeFileName mCssPath
+
   let config =
         updateGithubRoot root $
-          updateGithubAccessToken accessToken $
-            updateRootURI rootURI $
-              defaultConfiguration
-
+        updateGithubAccessToken accessToken $
+        updateRootURI rootURI $
+        updateJavascriptPath (Just jsFilename) $
+        updateStylesheetPath (Just cssFilename) $
+        defaultConfiguration
+  
   putStrLn $ "Listening on port " ++ show (getPort settings)
 
   redisConnectionSocket <- lookupEnv "REDIS_SOCKET"
@@ -183,7 +208,10 @@ theApplicationWithSettings settings = do
 
   pool <- newPool poolConfig
   conn <- either error R.checkedConnect connectInfo
-
-  let context = AppCtx {_getConfiguration = config, getPool = pool, _getSymmetricJWK = symmetricJwk, _getOidcEnvironment = oidcEnv}
+  
+  let context = AppCtx {_getConfiguration = config,
+                        getPool = pool,
+                        _getSymmetricJWK = symmetricJwk,
+                        _getOidcEnvironment = oidcEnv}
 
   appWithContext context

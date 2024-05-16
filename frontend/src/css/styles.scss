@@ -1,0 +1,7 @@
+// Import all of Bootstrap's CSS
+@import "~bootstrap/scss/bootstrap";
+
+// https://getbootstrap.com/docs/5.3/examples/sticky-footer-navbar/
+main > .container {
+    padding-top: 60px;
+}
