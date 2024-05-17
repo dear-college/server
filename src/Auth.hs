@@ -4,22 +4,14 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE InstanceSigs #-}
 
 module Auth where
 
-import AppM (AppM, HasConfiguration (..), HasCookieSettings (..), HasJwtSettings (..), HasOidcEnvironment (..), MonadDB (..), getConfiguration, getPool)
-import Control.Monad.Catch
-import Control.Monad.Except
-import Control.Monad.Except (liftEither, runExceptT, throwError)
-import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Reader
 import Data.Aeson
   ( FromJSON (..),
     ToJSON (..),
@@ -27,40 +19,19 @@ import Data.Aeson
   )
 import qualified Data.Aeson as JSON
 import qualified Data.Aeson.Types as AeT
-import qualified Data.ByteString as BS
-import qualified Data.ByteString.Char8 as C8
-import qualified Data.ByteString.Lazy as LBS
+
 import Data.Function ((&))
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import qualified Data.Text
 import Data.Text.Encoding (encodeUtf8)
-import GHC.Generics
-import Network.HTTP.Client
-  ( Manager,
-    newManager,
-  )
-import Network.HTTP.Client.TLS
-  ( tlsManagerSettings,
-  )
-import OIDC.Types (OIDCConf (..), OIDCEnv (..), genRandomBS)
+import GHC.Generics ( Generic )
+
 import Servant
 import Servant.Auth.Server as SAS
-import Servant.HTML.Blaze
-  ( HTML,
-  )
 import Servant.Server
-import qualified System.Random as Random
-import Text.Blaze
-  ( ToMarkup (..),
-  )
-import qualified Text.Blaze.Html as H
-import Text.Blaze.Html5 (ToMarkup, (!))
-import qualified Text.Blaze.Html5 as H
-import qualified Text.Blaze.Html5.Attributes as HA
-import Text.Blaze.Renderer.Utf8 (renderMarkup)
+
 import qualified Web.OIDC.Client as O
-import Web.OIDC.Client.Tokens
 import Web.OIDC.Client.Tokens
   ( IdTokenClaims (..),
     Tokens (..),
@@ -72,8 +43,6 @@ import Crypto.JWT (HasClaimsSet(..), ClaimsSet, emptyClaimsSet, NumericDate (..)
 import Control.Lens
 import Network.URI (parseURI, parseURIReference, uriPath, relativeTo, uriToString)
 import Data.Time.Clock (getCurrentTime, UTCTime, addUTCTime)
-import Configuration (getRootURI)
-
 
 data OtherClaims = OtherClaims
   { claimGivenName :: Text,

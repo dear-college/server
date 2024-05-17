@@ -326,19 +326,6 @@ server ::
   ServerT API m
 server = (handleLogin :<|> (handleLoggedIn loginHandler)) :<|> handleLogout
 
-type APIKey = BS.ByteString
-
-type Account = Text
-
-type Conf = [(APIKey, Account)]
-
-data Customer = Customer
-  { account :: Account,
-    apiKey :: APIKey,
-    mail :: Maybe Text,
-    fullname :: Maybe Text
-  }
-
 ----------------------------------------------------------------
 
 data Err = Err

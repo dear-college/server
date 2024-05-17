@@ -101,6 +101,7 @@ import OIDC.Types
     initOIDC,
   )
 import qualified Repos
+import qualified Markdown
 import Servant
 import qualified Servant.Auth.Server as SAS
 import Servant.Server
@@ -124,14 +125,13 @@ import Auth
 assetsDirectory :: FilePath
 assetsDirectory = "frontend/src/dist/assets"
 
-
 ntUser :: forall a r m. ( MonadReader r m, HasUser r  ) =>  User -> m a -> m a
 ntUser user = local (putUser user)
 
 proxyCtx :: Proxy '[AuthHandler Request User, R.Connection, SAS.CookieSettings, SAS.JWTSettings]
 proxyCtx = Proxy
 
-type TheAPI = Repos.API :<|> OIDC.API :<|> Raw
+type TheAPI = Repos.API :<|> OIDC.API :<|> Markdown.API :<|> Raw
 type TheAuthAPI = AuthJwtCookie :> TheAPI
 api :: Proxy TheAuthAPI
 api = Proxy
@@ -152,9 +152,7 @@ server ::
 server user = do
   hoistServerWithContext (Proxy :: Proxy TheAPI)
     proxyCtx
-    (ntUser user) $ Repos.server :<|> OIDC.server :<|> serveDirectoryWebApp "frontend/src/dist/assets"
-    
---  local (id :: AppCtx -> AppCtx) $ Repos.server :<|> OIDC.server :<|> serveDirectoryWebApp "frontend/src/dist/assets"
+    (ntUser user) $ Repos.server :<|> OIDC.server :<|> Markdown.server :<|> serveDirectoryWebApp "frontend/src/dist/assets"
 
 -- Find the first file with the given extension in the specified directory
 findFirstFileWithExtension :: FilePath -> String -> IO (Maybe FilePath)
@@ -165,6 +163,9 @@ findFirstFileWithExtension dir ext = do
 
 -- https://nicolasurquiola.ar/blog/2023-10-28-generalised-auth-with-jwt-in-servant
 type AuthJwtCookie = AuthProtect "jwt-cookie"
+
+jwtCookieSettings :: JWTValidationSettings
+jwtCookieSettings = defaultJWTValidationSettings (== "jwt-cookie")
 
 -- https://hackage.haskell.org/package/biscuit-servant-0.3.0.1/docs/Auth-Biscuit-Servant.html
 
@@ -194,10 +195,6 @@ verifyToken jwk settings token = maybeRight <$> runJOSE @JWTError verify
     lazy = LazyByteString.fromString (ByteString.toString token)
 
 type instance AuthServerData AuthJwtCookie = User
-
-
-jwtCookieSettings :: JWTValidationSettings
-jwtCookieSettings = defaultJWTValidationSettings (== "jwt-cookie")
 
 nt :: AppCtx -> AppM a -> Servant.Server.Handler a
 nt s x = runReaderT (runApp x) s

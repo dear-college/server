@@ -13,6 +13,6 @@
 
 module User where
 
-data User = AuthenticatedUser
+data User = AuthenticatedUser 
           | Unauthenticated
 
