@@ -51,8 +51,6 @@ getCurrentYear = do
     (year, _, _) <- toGregorian . utctDay <$> getCurrentTime
     return year
 
-xlinkHref = customAttribute "xlink:href"
-
 partialFooter :: (MonadError ServerError m, MonadIO m, MonadDB m, MonadReader r m, HasConfiguration r) => m H.Html
 partialFooter = do
   year <- liftIO getCurrentYear

@@ -36,6 +36,9 @@ executable dear-college
                      , Views.Branding
                      , Views.Header
                      , Views.Footer
+                     , Views.Page
+                     , User
+                     , Auth
   
   -- LANGUAGE extensions used by modules in this package.
   -- other-extensions:
@@ -80,7 +83,10 @@ executable dear-college
                      , time
                      , directory
                      , filepath
-
+                     , utf8-string
+                     , cookie
+                     , cmark
+                     
   -- Directories containing source files.
   hs-source-dirs:      src
 

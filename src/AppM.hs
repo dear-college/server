@@ -18,6 +18,7 @@ module AppM
     HasOidcEnvironment (..),
     HasJwtSettings (..),
     HasCookieSettings (..),
+    HasUser (..),
   )
 where
 
@@ -42,13 +43,16 @@ import Servant.Auth.Server
 import Servant.Server
 import Web.OIDC.Client.Types (SessionStore)
 
+import User
+
 data AppCtx = AppCtx
   { _getConfiguration :: Configuration,
     getPool :: Pool R.Connection,
     _getOidcEnvironment :: OIDCEnv,
     _getSymmetricJWK :: JWK,
     _jwtSettings :: JWTSettings,
-    _cookieSettings :: CookieSettings
+    _cookieSettings :: CookieSettings,
+    _user :: User
   }
 
 type Key = ByteString
@@ -110,6 +114,14 @@ class HasCookieSettings a where
 
 instance HasCookieSettings AppCtx where
   getCookieSettings = _cookieSettings
+
+class HasUser a where
+  getUser :: a -> User
+  putUser :: User -> a -> a
+
+instance HasUser AppCtx where
+  getUser = _user
+  putUser u a = a { _user = u }
 
 instance MonadThrow AppM where
   throwM = AppM . liftIO . throwM

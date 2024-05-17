@@ -7,6 +7,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Repos
   ( API,
@@ -14,7 +15,7 @@ module Repos
   )
 where
 
-import AppM (AppM, HasConfiguration (..), MonadDB (..), getConfiguration, getPool)
+import AppM (AppM, HasConfiguration (..), MonadDB (..), getConfiguration, getPool, HasUser(..))
 import Configuration
 import Control.Applicative
 import Control.Monad.Except (liftEither, runExceptT, throwError, MonadError)
@@ -41,15 +42,12 @@ import Text.Blaze.Html5 (customAttribute)
 import Control.Monad (replicateM_)
 import Network.URI (uriToString)
 
-import Views.Header (partialHeader)
-import Views.Footer (partialFooter)
+import Views.Page (partialPage)
+import User
 
 xlinkHref = customAttribute "xlink:href"
 
 type API = "books" :> (Get '[HTML] Homepage) :<|> "sample" :> (Get '[HTML] H.Html)
-
-applicationName :: Text
-applicationName = "dear.college"
 
 data Homepage = Homepage
 
@@ -76,42 +74,16 @@ server ::
     MonadDB m,
     MonadReader r m,
     HasConfiguration r,
-    MonadError ServerError m
-  ) =>
+    MonadError ServerError m,
+    HasUser r
+  ) => 
   ServerT API m
 server = getBooks :<|> getSample
 
 getBooks :: (MonadError ServerError m, MonadIO m, MonadDB m, MonadReader r m, HasConfiguration r) => m Homepage
 getBooks = pure Homepage
 
-
-
-partialPage :: (MonadError ServerError m, MonadIO m, MonadDB m, MonadReader r m, HasConfiguration r) => Text -> H.Html -> m H.Html
-partialPage title body = do
-  config <- asks getConfiguration
-  let jsPath = H.toValue $ getJavascriptPath config
-  let cssPath = H.toValue $ getStylesheetPath config
-
-  header <- partialHeader
-  footer <- partialFooter
-  
-  pure $ H.docTypeHtml $ do
-    H.html ! HA.lang "en" ! HA.class_ "h-100" $ do 
-      H.head $ do
-        H.meta ! HA.charset "utf-8"
-        H.meta ! HA.name "viewport" ! HA.content "width=device-width, initial-scale=1"
-        H.link ! HA.rel "stylesheet" ! HA.type_ "text/css" ! HA.href cssPath
-        H.script ! HA.type_ "text/javascript" ! HA.src jsPath $ ""
-        H.title $ H.toHtml (title <> " - " <> applicationName)
-      H.body ! HA.class_ "d-flex flex-column h-100" $ do
-        H.header $ do
-          header
-        H.main ! HA.class_ "flex-shrink-0" $ do
-          H.div ! HA.class_ "container" $ do
-            body
-        footer
-
-getSample :: (MonadError ServerError m, MonadIO m, MonadDB m, MonadReader r m, HasConfiguration r) => m H.Html
+getSample :: (MonadError ServerError m, MonadIO m, MonadDB m, MonadReader r m, HasConfiguration r, HasUser r) => m H.Html
 getSample = partialPage "Title" $ do
              H.h1 "Templates!"
              H.p "This will be type-checked, rendered and served"

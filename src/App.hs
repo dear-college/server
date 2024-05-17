@@ -7,6 +7,10 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE RankNTypes #-}
 
 module App
   ( api,
@@ -23,6 +27,7 @@ import AppM
     HasCookieSettings (..),
     HasJwtSettings (..),
     HasOidcEnvironment (..),
+    HasUser (..),
     MonadDB (..),
   )
 import Configuration
@@ -54,12 +59,27 @@ import Control.Monad.STM (atomically)
 import Control.Monad.Trans.Reader (ReaderT, ask, asks, runReaderT)
 import Control.Monad.Trans.State (StateT, runStateT)
 import Crypto.JOSE.JWK (JWK)
+import Crypto.JWT (HasClaimsSet, JWTError, JWTValidationSettings, SignedJWT, signJWT, verifyJWT, defaultJWTValidationSettings)
+import Crypto.JOSE
+  ( JWK
+  , KeyMaterialGenParam(OctGenParam)
+  , bestJWSAlg
+  , decodeCompact
+  , genJWK
+  , newJWSHeader
+  , runJOSE
+  , JOSE
+  )
 import qualified Crypto.JOSE.JWK as Jose
 import Crypto.JOSE.Types (Base64Octets (..))
 import Data.Aeson
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base64.URL as B64URL
 import qualified Data.ByteString.Char8 as C8
+import qualified Data.ByteString.Lazy.UTF8 as LazyByteString
+import Data.ByteString.UTF8 (ByteString)
+import qualified Data.ByteString.UTF8 as ByteString
+
 import qualified Data.Map as Map
 import Data.Pool (Pool, defaultPoolConfig, newPool, withResource)
 import Data.String.Conversions (cs)
@@ -82,7 +102,7 @@ import OIDC.Types
   )
 import qualified Repos
 import Servant
-import Servant.Auth.Server as SAS
+import qualified Servant.Auth.Server as SAS
 import Servant.Server
 import System.Environment (lookupEnv)
 import Network.URI (URI (..), parseURI)
@@ -92,29 +112,49 @@ import System.FilePath ((</>), takeExtension, takeFileName)
 import Control.Monad (filterM)
 import Data.List (find)
 
-type TheAPI = Repos.API :<|> OIDC.API :<|> Raw
+import Servant.API.Experimental.Auth    (AuthProtect)
+import Servant.Server.Experimental.Auth (AuthHandler, AuthServerData,
+                                         mkAuthHandler)
+import Network.Wai (Request(..), requestHeaders)
+import Web.Cookie                       (parseCookies)
 
--- Repos.API :<|>
+import User
+import Auth
 
 assetsDirectory :: FilePath
 assetsDirectory = "frontend/src/dist/assets"
 
-api :: Proxy TheAPI
+
+ntUser :: forall a r m. ( MonadReader r m, HasUser r  ) =>  User -> m a -> m a
+ntUser user = local (putUser user)
+
+proxyCtx :: Proxy '[AuthHandler Request User, R.Connection, SAS.CookieSettings, SAS.JWTSettings]
+proxyCtx = Proxy
+
+type TheAPI = Repos.API :<|> OIDC.API :<|> Raw
+type TheAuthAPI = AuthJwtCookie :> TheAPI
+api :: Proxy TheAuthAPI
 api = Proxy
 
-server ::
+server :: 
   ( MonadIO m,
     MonadDB m,
     MonadReader r m,
     HasConfiguration r,
+    HasUser r,
     HasOidcEnvironment r,
     HasJwtSettings r,
     HasCookieSettings r,
     MonadError ServerError m,
     MonadCatch m
-  ) =>
-  ServerT TheAPI m
-server = Repos.server :<|> OIDC.server :<|> serveDirectoryWebApp "frontend/src/dist/assets"
+  ) => 
+  ServerT TheAuthAPI m
+server user = do
+  hoistServerWithContext (Proxy :: Proxy TheAPI)
+    proxyCtx
+    (ntUser user) $ Repos.server :<|> OIDC.server :<|> serveDirectoryWebApp "frontend/src/dist/assets"
+    
+--  local (id :: AppCtx -> AppCtx) $ Repos.server :<|> OIDC.server :<|> serveDirectoryWebApp "frontend/src/dist/assets"
 
 -- Find the first file with the given extension in the specified directory
 findFirstFileWithExtension :: FilePath -> String -> IO (Maybe FilePath)
@@ -123,6 +163,42 @@ findFirstFileWithExtension dir ext = do
   let files = map (dir </>) allPaths
   return $ find ((== ext) . takeExtension) files
 
+-- https://nicolasurquiola.ar/blog/2023-10-28-generalised-auth-with-jwt-in-servant
+type AuthJwtCookie = AuthProtect "jwt-cookie"
+
+-- https://hackage.haskell.org/package/biscuit-servant-0.3.0.1/docs/Auth-Biscuit-Servant.html
+
+authHandler :: JWK -> JWTValidationSettings -> AuthHandler Request User
+authHandler jwk settings = mkAuthHandler handler
+  where
+  maybeToEither e = maybe (Left e) Right
+  throw401 msg = throwError $ err401 { errBody = msg }
+  handler req = do
+    case lookup "Cookie" $ requestHeaders req of
+      Nothing -> pure Unauthenticated
+      Just cookies -> case lookup "JWT-Cookie" $ parseCookies cookies of
+        Nothing -> pure Unauthenticated
+        Just token -> do
+          (jwt :: Maybe SessionClaims) <- liftIO $ verifyToken jwk settings token
+          case jwt of
+            Nothing -> pure Unauthenticated
+            Just _ -> pure AuthenticatedUser
+
+maybeRight :: Either a b -> Maybe b
+maybeRight = either (const Nothing) Just
+
+verifyToken :: (HasClaimsSet a, FromJSON a) => JWK -> JWTValidationSettings -> ByteString -> IO (Maybe a)
+verifyToken jwk settings token = maybeRight <$> runJOSE @JWTError verify
+  where
+    verify = decodeCompact lazy >>= (verifyJWT settings jwk)
+    lazy = LazyByteString.fromString (ByteString.toString token)
+
+type instance AuthServerData AuthJwtCookie = User
+
+
+jwtCookieSettings :: JWTValidationSettings
+jwtCookieSettings = defaultJWTValidationSettings (== "jwt-cookie")
+
 nt :: AppCtx -> AppM a -> Servant.Server.Handler a
 nt s x = runReaderT (runApp x) s
 
@@ -130,16 +206,16 @@ appWithContext :: AppCtx -> IO Application
 appWithContext ctx = do
   let pool = getPool ctx
       myKey = _getSymmetricJWK ctx
-      jwtCfg = defaultJWTSettings myKey
+      jwtCfg = SAS.defaultJWTSettings myKey
   withResource pool $ \conn -> do
-    let cookies = defaultCookieSettings { cookieXsrfSetting = Nothing }
-    let cfg = conn :. jwtCfg :. cookies :. EmptyContext
+    let cookies = SAS.defaultCookieSettings { SAS.cookieXsrfSetting = Nothing }
+    let cfg = authHandler myKey jwtCookieSettings :. conn :. jwtCfg :. cookies :. EmptyContext
     let ctx' = ctx {_jwtSettings = jwtCfg, _cookieSettings = cookies}
     pure $
       serveWithContext api cfg $
         hoistServerWithContext
           api
-          (Proxy :: Proxy '[R.Connection, SAS.CookieSettings, SAS.JWTSettings])
+          proxyCtx
           (nt ctx')
           server
 

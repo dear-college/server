@@ -74,7 +74,9 @@ import Network.URI (parseURI, parseURIReference, uriPath, relativeTo, uriToStrin
 import Data.Time.Clock (getCurrentTime, UTCTime, addUTCTime)
 import Configuration (getRootURI)
 
-import Servant.Auth.Server.Internal.Cookie (makeSessionCookie)
+import Servant.Auth.Server.Internal.Cookie (makeSessionCookie, applyCookieSettings, applySessionCookieSettings)
+
+import Web.Cookie
 
 instance FromHttpApiData C8.ByteString where
   parseUrlPiece = Right . C8.pack . Data.Text.unpack
@@ -82,12 +84,13 @@ instance FromHttpApiData C8.ByteString where
   parseQueryParam = Right . C8.pack . Data.Text.unpack
 
 type API =
-  "login"
+  ("login"
     :> ( -- redirect User to the OpenID Provider
          Get '[JSON] NoContent
            -- render the page that will save the user creds in the user-agent
            :<|> ("cb" :> QueryParam "error" Text :> QueryParam "code" Code :> QueryParam "state" State :> Get '[HTML] (Headers '[Header "Set-Cookie" SetCookie] String))
-       )
+       ))
+    :<|> ("logout" :> Get '[HTML] (Headers '[Header "Set-Cookie" SetCookie] NoContent))
 
 redirects :: (MonadError ServerError m) => String -> m ()
 redirects url = throwError err302 {errHeaders = [("Location", C8.pack url)]}
@@ -290,6 +293,25 @@ instance ToMarkup User where
             )
         )
 
+handleLogout ::
+  ( MonadIO m,
+    MonadDB m,
+    MonadReader r m,
+    HasConfiguration r,
+    HasOidcEnvironment r,
+    MonadError ServerError m,
+    MonadCatch m,
+    HasCookieSettings r
+  ) =>
+  m (Headers '[Header "Set-Cookie" SetCookie] NoContent)
+handleLogout = do
+  cookieSettings <- asks getCookieSettings
+  -- TODO: annoyignly, this sets the cookie to "value"
+  -- cf. https://github.com/haskell-servant/servant-auth/issues/127
+  let clearedSessionCookie = applySessionCookieSettings cookieSettings $ applyCookieSettings cookieSettings def
+  -- TODO: A bit frustrating, but I can't seem to redirect and also set a cookie without using throwError?
+  throwError $ err302 { errHeaders = [("Location", "/sample"), ("Set-Cookie", renderSetCookieBS clearedSessionCookie)] }
+
 server ::
   ( MonadIO m,
     MonadDB m,
@@ -302,11 +324,7 @@ server ::
     MonadCatch m
   ) =>
   ServerT API m
-server = handleLogin :<|> (handleLoggedIn loginHandler)
-
--- server :: OIDCEnv -> LoginHandler -> Server API
--- server oidcenv loginHandler =
---  handleLogin oidcenv :<|> handleLoggedIn oidcenv loginHandler
+server = (handleLogin :<|> (handleLoggedIn loginHandler)) :<|> handleLogout
 
 type APIKey = BS.ByteString
 

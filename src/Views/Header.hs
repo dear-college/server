@@ -12,7 +12,7 @@ module Views.Header
   ( partialHeader )
 where
 
-import AppM (AppM, HasConfiguration (..), MonadDB (..), getConfiguration, getPool)
+import AppM (AppM, HasConfiguration (..), MonadDB (..), getConfiguration, getPool, HasUser (..))
 import Configuration
 import Control.Applicative
 import Control.Monad.Except (liftEither, runExceptT, throwError, MonadError)
@@ -42,14 +42,27 @@ import Control.Monad (replicateM_)
 import Network.URI (uriToString)
 
 import Views.Branding (applicationName)
+import User
 
 xlinkHref = customAttribute "xlink:href"
 
-partialHeader :: (MonadError ServerError m, MonadIO m, MonadDB m, MonadReader r m, HasConfiguration r) => m H.Html
+loginButton :: (MonadError ServerError m, MonadIO m, MonadDB m, MonadReader r m, HasConfiguration r, HasUser r) => m H.Html
+loginButton = do
+  user <- asks getUser
+  case user of
+    AuthenticatedUser -> pure $ do
+                       H.a ! HA.class_ "btn btn-outline-primary"  ! HA.href "/logout" $ "Logout"
+    Unauthenticated -> pure $ do
+                       H.a ! HA.class_ "btn btn-primary"  ! HA.href "/login" $ "Login"
+
+partialHeader :: (MonadError ServerError m, MonadIO m, MonadDB m, MonadReader r m, HasUser r, HasConfiguration r) => m H.Html
 partialHeader = do
   config <- asks getConfiguration
   let root :: URI = getRootURI config
   let root' = uriToString id root ""
+
+  button <- loginButton
+  
   pure $ do
      H.header $ do
         H.nav ! HA.class_ "navbar navbar-expand-md navbar-dark fixed-top bg-dark" $ do
@@ -72,14 +85,6 @@ partialHeader = do
                         H.li ! HA.class_ "nav-item" $ 
                             H.a ! HA.class_ "nav-link" 
                                 ! HA.href "#" $ "Link"
-                        H.li ! HA.class_ "nav-item" $ 
-                            H.a ! HA.class_ "nav-link disabled" 
-                                ! ariaDisabled "true" $ "Disabled"
-                    H.form ! HA.class_ "d-flex" ! HA.role "search" $ do
-                        H.input ! HA.class_ "form-control me-2" 
-                                ! HA.type_ "search" 
-                                ! HA.placeholder "Search" 
-                                ! ariaLabel "Search"
-                        H.button ! HA.class_ "btn btn-outline-success" 
-                                 ! HA.type_ "submit" $ "Search"
+                    H.div ! HA.class_ "d-flex" $ do
+                      button
 
