@@ -63,3 +63,9 @@ npm run build
 cd ..
 cabal run
 ```
+
+## License
+
+The server (the code in `src/` and `frontend/`) is licensed under the AGPL.
+
+The code that other sites would use (namely the code in `library/`) is MIT licensed.

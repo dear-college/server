@@ -156,4 +156,3 @@ redirectToContentWithUser (AuthenticatedUser user) slug uri = do
   throwError $ err301 { errHeaders = [("Location", C8.pack uri'')] }
   
 
-
