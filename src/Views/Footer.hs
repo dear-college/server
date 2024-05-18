@@ -56,7 +56,7 @@ partialFooter = do
   year <- liftIO getCurrentYear
   pure $ do
     H.footer ! HA.class_ "py-3 footer mt-auto bg-body-tertiary" $ do
-     H.div ! HA.class_ "container" $ do    
+     H.div ! HA.class_ "container" $ do
       H.div ! HA.class_ "row" $ do
         replicateM_ 3 $ H.div ! HA.class_ "col-6 col-md-2 mb-3" $ do
             H.h5 "Section"
@@ -87,7 +87,7 @@ partialFooter = do
             H.html "."
         H.div ! HA.class_ "d-flex flex-column flex-sm-row justify-content-between" $ do
           H.p ! HA.class_ "text-muted" $ do
-            H.html "This material is based upon work supported by the National Science Foundation under NSF "
+            H.html "This website is based upon work supported by the National Science Foundation under NSF "
             H.a ! HA.href "https://www.nsf.gov/awardsearch/showAward?AWD_ID=1915363" $ "DUE–1915363"
             H.html ". "
             H.html "Any opinions, findings, and conclusions or recommendations expressed in this material are those of the author(s) and do not necessarily reflect the views of the National Science Foundation."
