@@ -97,7 +97,6 @@ import Network.Wai.Handler.Warp
 import qualified OIDC
 import OIDC.Types
   ( OIDCConf (..),
-    genRandomBS,
     initOIDC,
   )
 import qualified Repos
@@ -108,16 +107,14 @@ import Servant.Server
 import System.Environment (lookupEnv)
 import Network.URI (URI (..), parseURI)
 
-import System.Directory (listDirectory, doesDirectoryExist)
-import System.FilePath ((</>), takeExtension, takeFileName)
-import Control.Monad (filterM)
-import Data.List (find)
-
 import Servant.API.Experimental.Auth    (AuthProtect)
 import Servant.Server.Experimental.Auth (AuthHandler, AuthServerData,
                                          mkAuthHandler)
 import Network.Wai (Request(..), requestHeaders)
 import Web.Cookie                       (parseCookies)
+
+import System.FilePath (takeFileName)
+import FindFile (findFirstFileWithExtension)
 
 import User
 import Auth
@@ -153,13 +150,6 @@ server user = do
   hoistServerWithContext (Proxy :: Proxy TheAPI)
     proxyCtx
     (ntUser user) $ Repos.server :<|> OIDC.server :<|> Markdown.server :<|> serveDirectoryWebApp "frontend/src/dist/assets"
-
--- Find the first file with the given extension in the specified directory
-findFirstFileWithExtension :: FilePath -> String -> IO (Maybe FilePath)
-findFirstFileWithExtension dir ext = do
-  allPaths <- listDirectory dir
-  let files = map (dir </>) allPaths
-  return $ find ((== ext) . takeExtension) files
 
 -- https://nicolasurquiola.ar/blog/2023-10-28-generalised-auth-with-jwt-in-servant
 type AuthJwtCookie = AuthProtect "jwt-cookie"
