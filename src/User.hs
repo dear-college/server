@@ -13,6 +13,11 @@
 
 module User where
 
-data User = AuthenticatedUser 
+import Network.URI
+
+-- Becaues the subscriber claim in a JWT is a StringOrURI
+newtype Subscriber = Subscriber URI deriving (Eq, Show)
+
+data User = AuthenticatedUser Subscriber
           | Unauthenticated
 

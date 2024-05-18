@@ -12,6 +12,7 @@ module AppM
   ( AppCtx (..),
     AppM (..),
     MonadDB (..),
+    MonadRandom (..),
     Key,
     Field,
     HasConfiguration (..),
@@ -42,6 +43,7 @@ import OIDC.Types (OIDCEnv (..))
 import Servant.Auth.Server
 import Servant.Server
 import Web.OIDC.Client.Types (SessionStore)
+import Crypto.Random.Types (MonadRandom)
 
 import User
 
@@ -105,9 +107,11 @@ instance HasOidcEnvironment AppCtx where
 
 class HasJwtSettings a where
   getJwtSettings :: a -> JWTSettings
+  getJWK :: a -> JWK
 
 instance HasJwtSettings AppCtx where
   getJwtSettings = _jwtSettings
+  getJWK = _getSymmetricJWK
 
 class HasCookieSettings a where
   getCookieSettings :: a -> CookieSettings
@@ -128,3 +132,7 @@ instance MonadThrow AppM where
 
 instance MonadCatch AppM where
   catch (AppM m) handler = AppM $ m `catch` (runApp . handler)
+
+instance MonadRandom AppM where
+  getRandomBytes  = liftIO .  getRandomBytes 
+

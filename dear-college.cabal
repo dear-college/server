@@ -41,6 +41,7 @@ executable dear-college
                      , Auth
                      , Markdown
                      , FindFile
+                     , Courses
   
   -- LANGUAGE extensions used by modules in this package.
   -- other-extensions:
@@ -89,6 +90,7 @@ executable dear-college
                      , cookie
                      , cmark
                      , tagsoup
+                     , cryptonite
                      
   -- Directories containing source files.
   hs-source-dirs:      src

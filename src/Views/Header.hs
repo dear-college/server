@@ -50,7 +50,7 @@ loginButton :: (MonadError ServerError m, MonadIO m, MonadDB m, MonadReader r m,
 loginButton = do
   user <- asks getUser
   case user of
-    AuthenticatedUser -> pure $ do
+    AuthenticatedUser _ -> pure $ do
                        H.a ! HA.class_ "btn btn-outline-primary"  ! HA.href "/logout" $ "Logout"
     Unauthenticated -> pure $ do
                        H.a ! HA.class_ "btn btn-primary"  ! HA.href "/login" $ "Login"

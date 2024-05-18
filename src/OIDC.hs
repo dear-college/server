@@ -68,7 +68,7 @@ import Web.OIDC.Client.Tokens
   )
 import Web.OIDC.Client.Types (Code, SessionStore (..), State)
 
-import Crypto.JWT (HasClaimsSet(..), ClaimsSet, emptyClaimsSet, NumericDate (..), Audience (..), stringOrUri, StringOrURI(..) )
+import Crypto.JWT
 import Control.Lens
 import Network.URI (parseURI, parseURIReference, uriPath, relativeTo, uriToString)
 import Data.Time.Clock (getCurrentTime, UTCTime, addUTCTime)
@@ -189,8 +189,8 @@ instance HasClaimsSet SessionClaims where
   claimsSet :: Lens' SessionClaims ClaimsSet
   claimsSet f (SessionClaims claims) = SessionClaims <$> f claims
 
-sessionClaims :: URI -> Tokens OtherClaims -> Maybe SessionClaims
-sessionClaims uri tokens = do
+sessionClaims :: URI -> Tokens OtherClaims -> UTCTime -> Maybe SessionClaims
+sessionClaims uri tokens expiry = do
   let claims = otherClaims $ idToken tokens
   issuer <- parseURI $ Data.Text.unpack $ iss $ idToken tokens
   subscriber <- parseURIReference $ Data.Text.unpack $ sub $ idToken tokens
@@ -200,11 +200,18 @@ sessionClaims uri tokens = do
   pure $ emptyClaimsSet
      & claimSub ?~ subAndIss'
      & claimAud ?~ Audience [audience]
+     & claimExp ?~ NumericDate expiry
      & SessionClaims
+
+-- TODO: fix this
+instance AsError ServerError where
+  _Error :: Prism' ServerError Error
+  _Error = undefined
 
 handleLoggedIn ::
   ( MonadIO m,
     MonadDB m,
+    MonadRandom m,
     MonadReader r m,
     HasConfiguration r,
     HasOidcEnvironment r,
@@ -225,12 +232,14 @@ handleLoggedIn ::
 handleLoggedIn handleSuccessfulId err mcode mstate = do
   oidcenv <- asks getOidcEnvironment
   jwtSettings <- asks getJwtSettings
+  jwk <- asks getJWK
   cookieSettings <- asks getCookieSettings  
   state <- maybe (forbidden "Missing state") pure mstate
   code <- maybe (forbidden "Missing code") pure mcode
 
   issuedAt <- liftIO getCurrentTime
-  let expireAt = addUTCTime 900 issuedAt
+  -- TODO: When should the tokens expire?
+  let expireAt = addUTCTime 86400 issuedAt
 
   audience <- asks (getRootURI . getConfiguration)
 
@@ -238,16 +247,33 @@ handleLoggedIn handleSuccessfulId err mcode mstate = do
     Just errorMsg -> forbidden errorMsg
     Nothing -> do
       tokens <- O.getValidTokens sessionStore (oidc oidcenv) (mgr oidcenv) state code :: (MonadIO m, MonadDB m, MonadCatch m) => m (Tokens OtherClaims)
-      let maybeClaims = sessionClaims audience tokens
+      let maybeClaims = sessionClaims audience tokens expireAt
       case maybeClaims of
         Nothing -> forbidden "Missing JWT"
         Just claims -> do
-          mJWT <- liftIO $ makeJWT claims jwtSettings (Just expireAt)
-          mSessionCookie <- liftIO $ makeSessionCookie cookieSettings jwtSettings claims
-          case mSessionCookie of
-            Nothing -> forbidden "401 error"
-            Just cookie -> do
-              return $ (addHeader cookie) (show "cookie set")
+          liftIO $ print claims
+          bestAlg <- bestJWSAlg jwk
+          let bestHeader = newJWSHeader ((),bestAlg)
+          mJWT <- signJWT jwk bestHeader claims
+          liftIO $ print mJWT
+          let bs = encodeCompact mJWT
+          liftIO $ print bs
+          let cookie = applySessionCookieSettings cookieSettings
+               $ applyCookieSettings cookieSettings
+               $ def{ setCookieValue = LBS.toStrict bs }
+          return $ (addHeader cookie) (show "cookie set")
+
+          --  
+          --     $ Just
+          --     $ applySessionCookieSettings cookieSettings
+          --     $ applyCookieSettings cookieSettings
+          --     $ def{ setCookieValue = BSL.toStrict jwt }
+          
+          -- mSessionCookie <- liftIO $ makeSessionCookie cookieSettings jwtSettings claims
+          -- case mSessionCookie of
+          --   Nothing -> 
+          --   Just cookie -> do
+
 
 -- case err of
 --   Just errorMsg -> forbidden errorMsg
@@ -315,6 +341,7 @@ handleLogout = do
 server ::
   ( MonadIO m,
     MonadDB m,
+    MonadRandom m,
     MonadReader r m,
     HasConfiguration r,
     HasOidcEnvironment r,

@@ -29,6 +29,7 @@ import AppM
     HasOidcEnvironment (..),
     HasUser (..),
     MonadDB (..),
+    MonadRandom (..),    
   )
 import Configuration
   ( Configuration (getRootURI),
@@ -56,10 +57,13 @@ import Control.Monad.IO.Class
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader
 import Control.Monad.STM (atomically)
+import Control.Lens
+import Control.Lens.Prism
 import Control.Monad.Trans.Reader (ReaderT, ask, asks, runReaderT)
 import Control.Monad.Trans.State (StateT, runStateT)
 import Crypto.JOSE.JWK (JWK)
-import Crypto.JWT (HasClaimsSet, JWTError, JWTValidationSettings, SignedJWT, signJWT, verifyJWT, defaultJWTValidationSettings)
+--import Crypto.JWT (HasClaimsSet, JWTError, JWTValidationSettings, SignedJWT, signJWT, verifyJWT, defaultJWTValidationSettings, claimSub, string, verifyClaims)
+import Crypto.JWT
 import Crypto.JOSE
   ( JWK
   , KeyMaterialGenParam(OctGenParam)
@@ -100,6 +104,7 @@ import OIDC.Types
     initOIDC,
   )
 import qualified Repos
+import qualified Courses
 import qualified Markdown
 import Servant
 import qualified Servant.Auth.Server as SAS
@@ -110,6 +115,7 @@ import Network.URI (URI (..), parseURI)
 import Servant.API.Experimental.Auth    (AuthProtect)
 import Servant.Server.Experimental.Auth (AuthHandler, AuthServerData,
                                          mkAuthHandler)
+import Servant.Auth.Server.Internal.ConfigTypes
 import Network.Wai (Request(..), requestHeaders)
 import Web.Cookie                       (parseCookies)
 
@@ -128,7 +134,7 @@ ntUser user = local (putUser user)
 proxyCtx :: Proxy '[AuthHandler Request User, R.Connection, SAS.CookieSettings, SAS.JWTSettings]
 proxyCtx = Proxy
 
-type TheAPI = Repos.API :<|> OIDC.API :<|> Markdown.API :<|> Raw
+type TheAPI = Repos.API :<|> OIDC.API :<|> Markdown.API :<|> Courses.API :<|> Raw
 type TheAuthAPI = AuthJwtCookie :> TheAPI
 api :: Proxy TheAuthAPI
 api = Proxy
@@ -143,19 +149,17 @@ server ::
     HasJwtSettings r,
     HasCookieSettings r,
     MonadError ServerError m,
-    MonadCatch m
+    MonadCatch m,
+    MonadRandom m
   ) => 
   ServerT TheAuthAPI m
 server user = do
   hoistServerWithContext (Proxy :: Proxy TheAPI)
     proxyCtx
-    (ntUser user) $ Repos.server :<|> OIDC.server :<|> Markdown.server :<|> serveDirectoryWebApp "frontend/src/dist/assets"
+    (ntUser user) $ Repos.server :<|> OIDC.server :<|> Markdown.server :<|> Courses.server :<|> serveDirectoryWebApp "frontend/src/dist/assets"
 
 -- https://nicolasurquiola.ar/blog/2023-10-28-generalised-auth-with-jwt-in-servant
 type AuthJwtCookie = AuthProtect "jwt-cookie"
-
-jwtCookieSettings :: JWTValidationSettings
-jwtCookieSettings = defaultJWTValidationSettings (== "jwt-cookie")
 
 -- https://hackage.haskell.org/package/biscuit-servant-0.3.0.1/docs/Auth-Biscuit-Servant.html
 
@@ -170,20 +174,34 @@ authHandler jwk settings = mkAuthHandler handler
       Just cookies -> case lookup "JWT-Cookie" $ parseCookies cookies of
         Nothing -> pure Unauthenticated
         Just token -> do
-          (jwt :: Maybe SessionClaims) <- liftIO $ verifyToken jwk settings token
+          (jwt :: Maybe ClaimsSet) <- liftIO $ verifyToken jwk settings token
           case jwt of
             Nothing -> pure Unauthenticated
-            Just _ -> pure AuthenticatedUser
+            Just claims -> do
+              case preview (claimSub . _Just . uri) claims of
+                Nothing -> pure Unauthenticated
+                Just s -> do
+                  pure $ AuthenticatedUser $ Subscriber s
 
 maybeRight :: Either a b -> Maybe b
 maybeRight = either (const Nothing) Just
 
-verifyToken :: (HasClaimsSet a, FromJSON a) => JWK -> JWTValidationSettings -> ByteString -> IO (Maybe a)
-verifyToken jwk settings token = maybeRight <$> runJOSE @JWTError verify
+verifyToken :: JWK -> JWTValidationSettings -> ByteString -> IO (Maybe ClaimsSet)
+verifyToken jwk settings token = do
+  x <- runJOSE @JWTError verify
+  case x of
+    Left e -> do
+      print e
+      return Nothing
+    Right m -> do
+      return $ Just m
   where
-    verify = decodeCompact lazy >>= (verifyJWT settings jwk)
-    lazy = LazyByteString.fromString (ByteString.toString token)
+    verify = do
+      c <- decodeCompact lazy
+      verifyClaims settings jwk c
 
+    lazy = LazyByteString.fromString (ByteString.toString token)
+    
 type instance AuthServerData AuthJwtCookie = User
 
 nt :: AppCtx -> AppM a -> Servant.Server.Handler a
@@ -196,7 +214,7 @@ appWithContext ctx = do
       jwtCfg = SAS.defaultJWTSettings myKey
   withResource pool $ \conn -> do
     let cookies = SAS.defaultCookieSettings { SAS.cookieXsrfSetting = Nothing }
-    let cfg = authHandler myKey jwtCookieSettings :. conn :. jwtCfg :. cookies :. EmptyContext
+    let cfg = authHandler myKey (jwtSettingsToJwtValidationSettings jwtCfg) :. conn :. jwtCfg :. cookies :. EmptyContext
     let ctx' = ctx {_jwtSettings = jwtCfg, _cookieSettings = cookies}
     pure $
       serveWithContext api cfg $
