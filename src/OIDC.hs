@@ -240,8 +240,8 @@ handleLoggedIn handleSuccessfulId err mcode mstate = do
   state <- maybe (forbidden "Missing state") pure mstate
   code <- maybe (forbidden "Missing code") pure mcode
 
-  issuedAt <- liftIO getCurrentTime
   -- TODO: When should the tokens expire?
+  issuedAt <- liftIO getCurrentTime
   let expireAt = addUTCTime 86400 issuedAt
 
   audience <- asks (getRootURI . getConfiguration)
@@ -258,7 +258,6 @@ handleLoggedIn handleSuccessfulId err mcode mstate = do
           bestAlg <- bestJWSAlg jwk
           let bestHeader = newJWSHeader ((),bestAlg)
           mJWT <- signJWT jwk bestHeader claims
-          liftIO $ print mJWT
           let bs = encodeCompact mJWT
           let cookie = applySessionCookieSettings cookieSettings
                            $ applyCookieSettings cookieSettings
