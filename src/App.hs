@@ -191,7 +191,6 @@ verifyToken jwk settings token = do
   x <- runJOSE @JWTError verify
   case x of
     Left e -> do
-      print e
       return Nothing
     Right m -> do
       return $ Just m
@@ -201,7 +200,7 @@ verifyToken jwk settings token = do
       verifyClaims settings jwk c
 
     lazy = LazyByteString.fromString (ByteString.toString token)
-    
+
 type instance AuthServerData AuthJwtCookie = User
 
 nt :: AppCtx -> AppM a -> Servant.Server.Handler a

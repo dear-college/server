@@ -17,6 +17,7 @@ module OIDC (API (..), server) where
 import AppM (AppM, HasConfiguration (..), HasCookieSettings (..), HasJwtSettings (..), HasOidcEnvironment (..), MonadDB (..), getConfiguration, getPool)
 import Control.Monad.Catch
 import Control.Monad.Except
+import Control.Monad.Error.Lens (throwing, throwing_)
 import Control.Monad.Except (liftEither, runExceptT, throwError)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader
@@ -203,10 +204,12 @@ sessionClaims uri tokens expiry = do
      & claimExp ?~ NumericDate expiry
      & SessionClaims
 
--- TODO: fix this
 instance AsError ServerError where
-  _Error :: Prism' ServerError Error
-  _Error = undefined
+  _Error = prism' embed match
+    where embed :: Error -> ServerError
+          embed _ = err500
+          match :: ServerError -> Maybe Error
+          match _ = Nothing
 
 handleLoggedIn ::
   ( MonadIO m,
@@ -257,23 +260,10 @@ handleLoggedIn handleSuccessfulId err mcode mstate = do
           mJWT <- signJWT jwk bestHeader claims
           liftIO $ print mJWT
           let bs = encodeCompact mJWT
-          liftIO $ print bs
           let cookie = applySessionCookieSettings cookieSettings
-               $ applyCookieSettings cookieSettings
-               $ def{ setCookieValue = LBS.toStrict bs }
+                           $ applyCookieSettings cookieSettings
+                           $ def{ setCookieValue = LBS.toStrict bs }
           return $ (addHeader cookie) (show "cookie set")
-
-          --  
-          --     $ Just
-          --     $ applySessionCookieSettings cookieSettings
-          --     $ applyCookieSettings cookieSettings
-          --     $ def{ setCookieValue = BSL.toStrict jwt }
-          
-          -- mSessionCookie <- liftIO $ makeSessionCookie cookieSettings jwtSettings claims
-          -- case mSessionCookie of
-          --   Nothing -> 
-          --   Just cookie -> do
-
 
 -- case err of
 --   Just errorMsg -> forbidden errorMsg
