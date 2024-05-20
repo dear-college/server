@@ -13,10 +13,6 @@
 module Auth where
 
 import Data.Aeson
-  ( FromJSON (..),
-    ToJSON (..),
-    (.:),
-  )
 import qualified Data.Aeson as JSON
 import qualified Data.Aeson.Types as AeT
 
@@ -31,6 +27,11 @@ import Servant
 import Servant.Auth.Server as SAS
 import Servant.Server
 
+import Crypto.JWT
+import Control.Lens
+
+import qualified Data.Aeson.KeyMap as M
+
 import qualified Web.OIDC.Client as O
 import Web.OIDC.Client.Tokens
   ( IdTokenClaims (..),
@@ -43,6 +44,14 @@ import Crypto.JWT (HasClaimsSet(..), ClaimsSet, emptyClaimsSet, NumericDate (..)
 import Control.Lens
 import Network.URI (parseURI, parseURIReference, uriPath, relativeTo, uriToString)
 import Data.Time.Clock (getCurrentTime, UTCTime, addUTCTime)
+
+import User (Subscriber(..))
+import qualified Data.Text as Text
+
+stripPathFromURI :: URI -> Maybe Text
+stripPathFromURI uri = do
+  let noPathUri = uri { uriPath = "", uriQuery = "", uriFragment = "" }
+  return . Text.pack $ uriToString id noPathUri ""
 
 data OtherClaims = OtherClaims
   { claimGivenName :: Text,
@@ -85,3 +94,32 @@ sessionClaims uri tokens = do
      & claimSub ?~ subAndIss'
      & claimAud ?~ Audience [audience]
      & SessionClaims
+
+data ToolClaims = ToolClaims { jwtClaims :: ClaimsSet, scope :: [Text] }
+  deriving (Show)
+
+instance HasClaimsSet ToolClaims where
+  claimsSet f s = fmap (\a' -> s { jwtClaims = a' }) (f (jwtClaims s))
+
+instance FromJSON ToolClaims where
+  parseJSON = withObject "ToolClaims" $ \o -> ToolClaims
+    <$> parseJSON (Object o)
+    <*> o .: "scp"
+
+instance ToJSON ToolClaims where
+  toJSON s =
+    ins "scp" (scope s) (toJSON (jwtClaims s))
+    where
+      ins k v (Object o) = Object $ M.insert k (toJSON v) o
+      ins _ _ a = a
+
+toolClaims :: URI -> UTCTime -> Subscriber -> URI -> Maybe ToolClaims
+toolClaims audience expiry (Subscriber sub) target = do
+  target' <- stripPathFromURI target
+  audience <- preview stringOrUri $ uriToString id audience ""
+  sub' <- preview stringOrUri $ uriToString id sub ""
+  let claims = emptyClaimsSet
+        & claimSub ?~ sub'
+        & claimAud ?~ Audience [audience]
+        & claimExp ?~ NumericDate expiry
+  pure $ ToolClaims claims [target']

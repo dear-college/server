@@ -24,6 +24,7 @@ import AppM
   ( AppCtx (..),
     AppM (..),
     HasConfiguration (..),
+    MonadTime (..),
     HasCookieSettings (..),
     HasJwtSettings (..),
     HasOidcEnvironment (..),
@@ -104,6 +105,7 @@ import OIDC.Types
     initOIDC,
   )
 import qualified Repos
+import qualified Backend
 import qualified Courses
 import qualified Markdown
 import Servant
@@ -134,7 +136,7 @@ ntUser user = local (putUser user)
 proxyCtx :: Proxy '[AuthHandler Request User, R.Connection, SAS.CookieSettings, SAS.JWTSettings]
 proxyCtx = Proxy
 
-type TheAPI = Repos.API :<|> OIDC.API :<|> Markdown.API :<|> Courses.API :<|> Raw
+type TheAPI = Repos.API :<|> OIDC.API :<|> Markdown.API :<|> Courses.API :<|> Backend.API :<|> Raw
 type TheAuthAPI = AuthJwtCookie :> TheAPI
 api :: Proxy TheAuthAPI
 api = Proxy
@@ -142,6 +144,7 @@ api = Proxy
 server :: 
   ( MonadIO m,
     MonadDB m,
+    MonadTime m,
     MonadReader r m,
     HasConfiguration r,
     HasUser r,
@@ -156,7 +159,7 @@ server ::
 server user = do
   hoistServerWithContext (Proxy :: Proxy TheAPI)
     proxyCtx
-    (ntUser user) $ Repos.server :<|> OIDC.server :<|> Markdown.server :<|> Courses.server :<|> serveDirectoryWebApp "frontend/src/dist/assets"
+    (ntUser user) $ Repos.server :<|> OIDC.server :<|> Markdown.server :<|> Courses.server :<|> Backend.server :<|> serveDirectoryWebApp "frontend/src/dist/assets"
 
 -- https://nicolasurquiola.ar/blog/2023-10-28-generalised-auth-with-jwt-in-servant
 type AuthJwtCookie = AuthProtect "jwt-cookie"
@@ -215,6 +218,7 @@ appWithContext ctx = do
     let cookies = SAS.defaultCookieSettings { SAS.cookieXsrfSetting = Nothing }
     let cfg = authHandler myKey (jwtSettingsToJwtValidationSettings jwtCfg) :. conn :. jwtCfg :. cookies :. EmptyContext
     let ctx' = ctx {_jwtSettings = jwtCfg, _cookieSettings = cookies}
+
     pure $
       serveWithContext api cfg $
         hoistServerWithContext

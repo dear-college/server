@@ -47,14 +47,13 @@ import qualified Data.ByteString.Char8 as C8
 
 import Views.Page (partialPage)
 import User
+import Auth
 
 import Network.URI (URI, parseURI)
 import Data.Text (Text)
 import Data.Time.Clock (getCurrentTime, UTCTime, addUTCTime)
 import Crypto.JWT
 import Control.Lens
-import qualified Data.Aeson.KeyMap as M
-
 
 -- TODO: I am confused about whether URI's are really utf8 or...?
 textToURI :: Text -> Maybe URI
@@ -64,40 +63,6 @@ newtype Slug = Slug Text deriving (Eq, Show, FromHttpApiData)
 
 type API = "courses" :> Capture "slug" Slug :> CaptureAll "path" Text :> (Get '[HTML] H.Html)
 
-
-data ToolClaims = ToolClaims { jwtClaims :: ClaimsSet, scope :: [Text] }
-  deriving (Show)
-
-instance HasClaimsSet ToolClaims where
-  claimsSet f s = fmap (\a' -> s { jwtClaims = a' }) (f (jwtClaims s))
-
-instance FromJSON ToolClaims where
-  parseJSON = withObject "ToolClaims" $ \o -> ToolClaims
-    <$> parseJSON (Object o)
-    <*> o .: "scp"
-
-instance ToJSON ToolClaims where
-  toJSON s =
-    ins "scp" (scope s) (toJSON (jwtClaims s))
-    where
-      ins k v (Object o) = Object $ M.insert k (toJSON v) o
-      ins _ _ a = a
-
-stripPathFromURI :: URI -> Maybe Text
-stripPathFromURI uri = do
-  let noPathUri = uri { uriPath = "", uriQuery = "", uriFragment = "" }
-  return . Text.pack $ uriToString id noPathUri ""
-
-toolClaims :: URI -> UTCTime -> Subscriber -> URI -> Maybe ToolClaims
-toolClaims audience expiry (Subscriber sub) target = do
-  target' <- stripPathFromURI target
-  audience <- preview stringOrUri $ uriToString id audience ""
-  sub' <- preview stringOrUri $ uriToString id sub ""
-  let claims = emptyClaimsSet
-        & claimSub ?~ sub'
-        & claimAud ?~ Audience [audience]
-        & claimExp ?~ NumericDate expiry
-  pure $ ToolClaims claims [target']
 
 server ::
   ( MonadIO m,
@@ -140,6 +105,7 @@ redirectToContentWithUser (AuthenticatedUser user) slug uri = do
   -- TODO: When should the tokens expire?
   issuedAt <- liftIO getCurrentTime
   let expireAt = addUTCTime 86400 issuedAt
+  liftIO $ print $ "creaing JWT expiring at " <> (show expireAt)
 
   jwtSettings <- asks getJwtSettings
   jwk <- asks getJWK
@@ -153,6 +119,6 @@ redirectToContentWithUser (AuthenticatedUser user) slug uri = do
 
   let uri' = uri { uriFragment = "#" <> CL8.unpack bs }
   let uri'' = uriToString id uri' $ ""
-  throwError $ err301 { errHeaders = [("Location", C8.pack uri'')] }
+  throwError $ err302 { errHeaders = [("Location", C8.pack uri'')] }
   
 

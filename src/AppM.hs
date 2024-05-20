@@ -13,6 +13,7 @@ module AppM
     AppM (..),
     MonadDB (..),
     MonadRandom (..),
+    MonadTime (..),
     Key,
     Field,
     HasConfiguration (..),
@@ -44,6 +45,7 @@ import Servant.Auth.Server
 import Servant.Server
 import Web.OIDC.Client.Types (SessionStore)
 import Crypto.Random.Types (MonadRandom)
+import Control.Monad.Time
 
 import User
 
@@ -134,5 +136,9 @@ instance MonadCatch AppM where
   catch (AppM m) handler = AppM $ m `catch` (runApp . handler)
 
 instance MonadRandom AppM where
-  getRandomBytes  = liftIO .  getRandomBytes 
+  getRandomBytes  = liftIO .  getRandomBytes
+
+instance MonadTime AppM where
+  currentTime = liftIO currentTime
+  monotonicTime = liftIO monotonicTime
 
