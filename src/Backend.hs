@@ -76,6 +76,7 @@ import qualified Data.Text.Lazy.IO          as TL
 import Control.Monad.Except
 
 import Auth
+import Model
 
 instance (HashAlgorithm a) => FromHttpApiData (Digest a) where
   parseUrlPiece piece = do
@@ -108,8 +109,6 @@ instance FromHttpApiData SignedJWT where
       then decodeCompact $ LBS.fromStrict $ encodeUtf8 (Text.drop 7 s)
       else Left "should begin with Bearer"
 
-newtype Progress = Progress Int deriving (Eq, Show, Generic, FromJSON, ToJSON)
-
 type CorsHeaders = '[Header "Access-Control-Allow-Origin" Text,
                      Header "Access-Control-Allow-Credentials" Text,
                      Header "Access-Control-Allow-Headers" Text]
@@ -128,12 +127,6 @@ type ProgressAPI =
   )
 
 type API = "api" :> "v1" :> "progress" :> Header "Origin" URI :> Header "Authorization" SignedJWT :> Header "X-Worksheet" Text :> Capture "sha" (Digest SHA256) :> ProgressAPI
-
-data Worksheet = Worksheet { 
-  worksheetUri :: URI,
-  worksheetText :: Text,
-  worksheetHash :: Digest SHA256
-} deriving (Show)
 
 server ::
   ( MonadIO m,
@@ -190,7 +183,7 @@ getProgress ::
     HasUser r
   ) => 
   Maybe Worksheet -> Maybe URI -> Maybe SignedJWT -> m (Headers CorsHeaders Progress)
-getProgress _ origin (Just bearer) = do
+getProgress (Just worksheet) origin (Just bearer) = do
   jwk <- asks getJWK
   settings <- jwtSettingsToJwtValidationSettings <$> asks getJwtSettings
 
@@ -203,16 +196,22 @@ getProgress _ origin (Just bearer) = do
     Left e -> throwError $ err403 { errBody = "Invalid JWT: " <> (TL.encodeUtf8 $ TL.pack $ show e) }
     Right claims ->  do
       liftIO $ print claims
+
+      let sub :: Maybe URI = preview (claimSub . _Just . uri) claims
+      let user = case sub of
+            Just s -> AuthenticatedUser (Subscriber $ s)
+            Nothing -> Unauthenticated
+
       case listToMaybe $ scope claims of
         Nothing -> throwError $ err403 { errBody = "Invalid JWT: Missing scope" }
         Just (s :: Text) -> do
           --liftIO $ print $ s
           --liftIO $ print $ stripPathFromURI worksheet
-          --if (Just s) /= stripPathFromURI worksheet
-          --  then throwError $ err403 { errBody = "Invalid JWT: Scope does not match" }
-          --  else do
-            pure $ addCorsHeaders origin $ Progress 17
-
+          if worksheetMatchesScope worksheet s
+            then do
+              p <- readProgress user worksheet
+              pure $ addCorsHeaders origin $ p
+            else throwError $ err403 { errBody = "Invalid JWT: Scope does not match" }
 
 getProgress _ _ _ = do
   throwError $ err403 { errBody = "Missing fields" }
