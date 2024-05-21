@@ -115,7 +115,7 @@ type CorsHeaders = '[Header "Access-Control-Allow-Origin" Text,
 addCorsHeaders :: Maybe URI -> a -> Headers CorsHeaders a
 addCorsHeaders (Just uri) x = do
   let uri' = Text.pack $ uriToString id uri ""
-  addHeader uri' $ addHeader "true" $ addHeader "Authorization, X-Worksheet" x
+  addHeader uri' $ addHeader "true" $ addHeader "Authorization, X-Worksheet, Content-Type" x
 addCorsHeaders Nothing x = do
   addHeader "*" $ addHeader "false" $ addHeader "" x
 
@@ -171,6 +171,41 @@ optionsProgress (Just origin) _ = do
 optionsProgress Nothing _ = do
   throwError $ err403 { errBody = "CORS requires an Origin header" }
 
+tokenToUser ::
+  ( MonadIO m,
+    MonadDB m,
+    MonadTime m,
+    MonadReader r m,
+    HasConfiguration r,
+    MonadRandom m,
+    MonadError ServerError m,
+    HasJwtSettings r,
+    HasUser r
+  ) => 
+  SignedJWT -> Worksheet -> m User
+tokenToUser bearer worksheet = do
+  jwk <- asks getJWK
+  settings <- jwtSettingsToJwtValidationSettings <$> asks getJwtSettings
+
+  r <- runJOSE @JWTError $ do
+    (tc :: ToolClaims) <- verifyJWT settings jwk bearer
+    pure tc
+
+  case r of
+    Left e -> throwError $ err403 { errBody = "Invalid JWT: " <> (TL.encodeUtf8 $ TL.pack $ show e) }
+    Right claims ->  do
+      let sub :: Maybe URI = preview (claimSub . _Just . uri) claims
+      let user = case sub of
+            Just s -> AuthenticatedUser (Subscriber $ s)
+            Nothing -> Unauthenticated
+      case listToMaybe $ scope claims of
+        Nothing -> throwError $ err403 { errBody = "Invalid JWT: Missing scope" }
+        Just (s :: Text) -> do
+          if worksheetMatchesScope worksheet s
+            then do
+              pure user
+            else throwError $ err403 { errBody = "Invalid JWT: Scope does not match" }
+
 getProgress ::
   ( MonadIO m,
     MonadDB m,
@@ -184,34 +219,9 @@ getProgress ::
   ) => 
   Maybe Worksheet -> Maybe URI -> Maybe SignedJWT -> m (Headers CorsHeaders Progress)
 getProgress (Just worksheet) origin (Just bearer) = do
-  jwk <- asks getJWK
-  settings <- jwtSettingsToJwtValidationSettings <$> asks getJwtSettings
-
-  r <- runJOSE @JWTError $ do
-    -- c <- decodeCompact $ LBS.fromStrict $ encodeUtf8 (Text.drop 7 bearer)
-    (tc :: ToolClaims) <- verifyJWT settings jwk bearer
-    pure tc
-
-  case r of
-    Left e -> throwError $ err403 { errBody = "Invalid JWT: " <> (TL.encodeUtf8 $ TL.pack $ show e) }
-    Right claims ->  do
-      liftIO $ print claims
-
-      let sub :: Maybe URI = preview (claimSub . _Just . uri) claims
-      let user = case sub of
-            Just s -> AuthenticatedUser (Subscriber $ s)
-            Nothing -> Unauthenticated
-
-      case listToMaybe $ scope claims of
-        Nothing -> throwError $ err403 { errBody = "Invalid JWT: Missing scope" }
-        Just (s :: Text) -> do
-          --liftIO $ print $ s
-          --liftIO $ print $ stripPathFromURI worksheet
-          if worksheetMatchesScope worksheet s
-            then do
-              p <- readProgress user worksheet
-              pure $ addCorsHeaders origin $ p
-            else throwError $ err403 { errBody = "Invalid JWT: Scope does not match" }
+  user <- tokenToUser bearer worksheet
+  p <- readProgress user worksheet
+  pure $ addCorsHeaders origin $ p
 
 getProgress _ _ _ = do
   throwError $ err403 { errBody = "Missing fields" }
@@ -228,4 +238,9 @@ putProgress ::
     HasUser r
   ) => 
   Maybe Worksheet -> Maybe URI -> Maybe SignedJWT -> Progress -> m (Headers CorsHeaders NoContent)
+putProgress (Just worksheet) origin (Just bearer) progress = do
+  user <- tokenToUser bearer worksheet
+  _ <- writeProgress user worksheet progress
+  pure $ addCorsHeaders origin $ NoContent
+
 putProgress _ _ _ progress = pure $ addCorsHeaders Nothing $ NoContent

@@ -1,7 +1,7 @@
 import packageInfo from '../package.json';
 import * as jose from 'jose';
 
-console.log(`dear.college: version ${packageInfo.version}`);
+console.log(`@dear.college/client version ${packageInfo.version}`);
 
 function removeHash () { 
   history.pushState("", document.title, window.location.pathname + window.location.search);
@@ -34,42 +34,71 @@ function bufferToHex(buffer) {
 
 async function hashHex(text) {
   const encoder = new TextEncoder();
-  const data = encoder.encode(text);
-  console.log("hashing",text);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  return bufferToHex(hashBuffer);
+  return bufferToHex(await crypto.subtle.digest('SHA-256', encoder.encode(text)));
 }
 
 export async function getProgress( location = undefined ) {
   if (location === undefined) location = window.location.href;
 
   let jwt = localStorage.getItem("dear.college/jwt");
+  if (jwt === null) throw new Error('not logged in');
+  
   let claims = jose.decodeJwt(jwt);
-  console.log(claims);
-
   let sha = await hashHex(location);
-  
   let aud = claims.aud;
-  
-  // TODO: be more careful appending the path to the audience
-  const url = `${aud}api/v1/progress/${sha}`;
-  
-  console.log(url);
 
-  // Make the fetch request
+  const url = new URL(`/api/v1/progress/${sha}`, aud);
+
   try {
     const response = await fetch(url, {
       method: 'GET',
       credentials: 'include',
       headers: {
         'Authorization': `Bearer ${jwt}`,
-        'X-Worksheet': location
+        'X-Worksheet': location,
+        'Accept': 'application/json'
       }
     });
 
-    // Check if the response is OK and return the body
     if (response.ok) {
-      return await response.json(); // Assuming the response is JSON
+      let result = await response.json();
+      return result.hasOwnProperty('progress') ? parseFloat(result.progress) : NaN;
+    } else {
+      throw new Error(`Failed to fetch: ${response.status} ${response.statusText}`);
+    }
+  } catch (error) {
+    console.error('Fetch error:', error);
+    throw error;
+  }
+}
+
+export async function putProgress( progress = 1.0, location = undefined ) {
+  if (location === undefined) location = window.location.href;
+
+  let jwt = localStorage.getItem("dear.college/jwt");
+  if (jwt === null) throw new Error('not logged in');
+  
+  let claims = jose.decodeJwt(jwt);
+  let sha = await hashHex(location);
+  let aud = claims.aud;
+
+  const url = new URL(`/api/v1/progress/${sha}`, aud);
+  
+  try {
+    const response = await fetch(url, {
+      method: 'PUT',
+      credentials: 'include',
+      headers: {
+        'Authorization': `Bearer ${jwt}`,
+        'X-Worksheet': location,
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({progress: progress})
+    });
+
+    if (response.ok) {
+      return;
     } else {
       throw new Error(`Failed to fetch: ${response.status} ${response.statusText}`);
     }

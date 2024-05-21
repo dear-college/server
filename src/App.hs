@@ -131,7 +131,7 @@ ntUser user = local (putUser user)
 proxyCtx :: Proxy '[AuthHandler Request User, R.Connection, SAS.CookieSettings, SAS.JWTSettings]
 proxyCtx = Proxy
 
-type TheAPI = Repos.API :<|> OIDC.API :<|> Markdown.API :<|> Courses.API :<|> Backend.API :<|> Raw
+type TheAPI = Repos.API :<|> OIDC.API :<|> Markdown.API :<|> Courses.API :<|> Backend.API -- :<|> Raw
 type TheAuthAPI = AuthJwtCookie :> TheAPI
 api :: Proxy TheAuthAPI
 api = Proxy
@@ -154,7 +154,7 @@ server ::
 server assetPath markdownPath user = do
   hoistServerWithContext (Proxy :: Proxy TheAPI)
     proxyCtx
-    (ntUser user) $ Repos.server :<|> OIDC.server :<|> (Markdown.server markdownPath) :<|> Courses.server :<|> Backend.server :<|> serveDirectoryWebApp assetPath
+    (ntUser user) $ Repos.server :<|> OIDC.server :<|> (Markdown.server markdownPath) :<|> Courses.server :<|> Backend.server -- :<|> serveDirectoryWebApp assetPath
 
 -- https://nicolasurquiola.ar/blog/2023-10-28-generalised-auth-with-jwt-in-servant
 type AuthJwtCookie = AuthProtect "jwt-cookie"
