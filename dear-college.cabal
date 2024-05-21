@@ -22,7 +22,7 @@ maintainer:         kisonecat@gmail.com
 extra-source-files: CHANGELOG.md
 
 executable dear-college 
-  ghc-options: -Wall
+  ghc-options: -Wall -threaded
   -- .hs or .lhs file containing the Main module.
   main-is:             Main.hs
 

@@ -1,5 +1,5 @@
 {
-  "name": "dear-college",
+  "name": "@dear.college/frontend",
   "version": "0.1.0",
   "description": "frontend code for https://dear.college",
   "main": "index.js",
