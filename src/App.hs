@@ -127,9 +127,6 @@ import FindFile (findFirstFileWithExtension)
 import User
 import Auth
 
-assetsDirectory :: FilePath
-assetsDirectory = "frontend/src/dist/assets"
-
 ntUser :: forall a r m. ( MonadReader r m, HasUser r  ) =>  User -> m a -> m a
 ntUser user = local (putUser user)
 
@@ -256,6 +253,11 @@ theApplicationWithSettings settings = do
 
   let oidcConf = OIDCConf <$> googleRedirectUri <*> googleClientId <*> googleClientSecret
   oidcEnv <- maybe (error "Missing GOOGLE_* in .env") initOIDC oidcConf
+
+  rootURI' <- lookupEnv "ROOT_URL"
+
+  frontendPath <- lookupEnv "FRONTEND_PATH"
+  let assetsDirectory = maybe (error "Missing FRONTEND_PATH in .env") id frontendPath
 
   mJsPath <- findFirstFileWithExtension assetsDirectory ".js"
   let jsFilename = maybe (error "Could not find .js file in assets") takeFileName mJsPath
