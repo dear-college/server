@@ -6,7 +6,7 @@ pkgs.buildNpmPackage rec {
 
   src = pkgs.lib.cleanSource ./.;
 
-  npmDepsHash = "sha256-MQxW0zKgUKR6djJ1kaDvtmq1qSYJYY3X0safakRjs1A=";
+  npmDepsHash = "sha256-Pq2kt7PXDUDPD0fUA/RcCqZrHGRsLl53tqHg22ZpD4M=";
 
   # The prepack script runs the build script, which we'd rather do in the build phase.
   npmPackFlags = [ "--ignore-scripts" ];
