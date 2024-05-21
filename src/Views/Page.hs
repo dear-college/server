@@ -8,15 +8,16 @@
 
 module Views.Page (partialPage) where
 
-import AppM (AppM, HasConfiguration (..), HasUser (..), MonadDB (..))
-import Configuration
 import Control.Monad.Except (MonadError)
 import Control.Monad.Reader
 import Data.Text (Text)
 import Servant
-import Text.Blaze.Html5 ((!))
 import qualified Text.Blaze.Html5 as H
+import Text.Blaze.Html5 ((!))
 import qualified Text.Blaze.Html5.Attributes as HA
+
+import AppM (AppM, HasConfiguration(..), HasUser(..), MonadDB(..))
+import Configuration
 import Views.Branding
 import Views.Footer (partialFooter)
 import Views.Header (partialHeader)

@@ -117,7 +117,7 @@ ntUser user = local (putUser user)
 proxyCtx :: Proxy '[AuthHandler Request User, R.Connection, SAS.CookieSettings, SAS.JWTSettings]
 proxyCtx = Proxy
 
-type TheAPI = Repos.API :<|> OIDC.API :<|> Markdown.API :<|> Courses.API :<|> Backend.API -- :<|> Raw
+type TheAPI = Repos.API :<|> OIDC.API :<|> Markdown.API :<|> Courses.API :<|> Backend.API :<|> Raw
 
 type TheAuthAPI = AuthJwtCookie :> TheAPI
 
@@ -146,7 +146,7 @@ server assetPath markdownPath user = do
     (Proxy :: Proxy TheAPI)
     proxyCtx
     (ntUser user)
-    $ Repos.server :<|> OIDC.server :<|> (Markdown.server markdownPath) :<|> Courses.server :<|> Backend.server -- :<|> serveDirectoryWebApp assetPath
+    $ Repos.server :<|> OIDC.server :<|> (Markdown.server markdownPath) :<|> Courses.server :<|> Backend.server :<|> serveDirectoryWebApp assetPath
 
 -- https://nicolasurquiola.ar/blog/2023-10-28-generalised-auth-with-jwt-in-servant
 type AuthJwtCookie = AuthProtect "jwt-cookie"
@@ -238,8 +238,6 @@ theApplicationWithSettings settings = do
   let oidcConf = OIDCConf <$> googleRedirectUri <*> googleClientId <*> googleClientSecret
   oidcEnv <- maybe (error "Missing GOOGLE_* in .env") initOIDC oidcConf
 
-  rootURI' <- lookupEnv "ROOT_URL"
-
   frontendPath <- lookupEnv "FRONTEND_PATH"
   let assetsDirectory = maybe (error "Missing FRONTEND_PATH in .env") id frontendPath
 
@@ -278,7 +276,6 @@ theApplicationWithSettings settings = do
           60 -- how long in seconds to keep unused connections open
           50 -- maximum number of connections
   pool <- newPool poolConfig
-  conn <- either error R.checkedConnect connectInfo
 
   let context =
         AppCtx

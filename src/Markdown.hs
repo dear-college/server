@@ -42,8 +42,13 @@ extractH1 html = case partitions (isTagOpenName "h1") (parseTags html) of
   [] -> Nothing
   (x : _) -> Just (innerText $ takeWhile (not . isTagCloseName "h1") x)
 
-type API = "readme" :> (Get '[HTML] H.Html)
+type API = (Get '[HTML] H.Html) :<|> "readme" :> (Get '[HTML] H.Html)
 
+landingPage :: (MonadError ServerError m, MonadIO m, MonadDB m, MonadReader r m, HasConfiguration r, HasUser r) => m H.Html
+landingPage = do
+  partialPage "/" $ do
+    H.h1 "Hello!"
+   
 render :: (MonadError ServerError m, MonadIO m, MonadDB m, MonadReader r m, HasConfiguration r, HasUser r) => FilePath -> m H.Html
 render filename = do
   content <- liftIO $ TIO.readFile filename
@@ -63,4 +68,4 @@ server ::
   ) =>
   FilePath ->
   ServerT API m
-server root = render (root </> "README.md")
+server root = landingPage :<|> render (root </> "README.md")

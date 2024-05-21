@@ -10,30 +10,33 @@
 
 module Views.Header (partialHeader) where
 
-import AppM (AppM, HasConfiguration (..), HasUser (..), MonadDB (..), getConfiguration, getPool)
-import Configuration
 import Control.Applicative
 import Control.Monad (replicateM_)
 import Control.Monad.Except (MonadError, liftEither, runExceptT, throwError)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader
+
 import Data.Aeson
 import Data.Aeson.Types (Parser)
-import qualified Data.ByteString as BS
 import Data.ByteString.Char8 (pack)
 import Data.List (break)
 import Data.Maybe
 import Data.Pool (withResource)
 import Data.Text (Text)
-import qualified Data.Text as Text
-import qualified Database.Redis as R
+
 import Network.URI (uriToString)
 import Servant
 import Servant.HTML.Blaze
 import Servant.Server
-import Text.Blaze.Html5 (ToMarkup, customAttribute, (!))
+
 import qualified Text.Blaze.Html5 as H
+import Text.Blaze.Html5 (ToMarkup, customAttribute, (!))
 import qualified Text.Blaze.Html5.Attributes as HA
+
+import AppM
+    (AppM, HasConfiguration(..), HasUser(..), MonadDB(..), getConfiguration,
+     getPool)
+import Configuration
 import User
 import Views.A11y
 import Views.Branding (applicationName)
