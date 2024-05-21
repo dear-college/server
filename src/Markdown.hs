@@ -29,6 +29,7 @@ import CMark (commonmarkToHtml)
 import qualified Data.Text.IO as TIO
 
 import Text.HTML.TagSoup
+import System.FilePath ((</>))
 
 -- Extract text from the first <h1> tag using partitions
 extractH1 :: Text -> Maybe Text
@@ -55,5 +56,6 @@ server ::
     MonadError ServerError m,
     HasUser r
   ) => 
-  ServerT API m
-server = render "README.md"
+  FilePath -> ServerT API m
+server root = render (root </> "README.md")
+

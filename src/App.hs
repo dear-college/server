@@ -150,11 +150,11 @@ server ::
     MonadCatch m,
     MonadRandom m
   ) => 
-  FilePath -> ServerT TheAuthAPI m
-server assetPath user = do
+  FilePath -> FilePath -> ServerT TheAuthAPI m
+server assetPath markdownPath user = do
   hoistServerWithContext (Proxy :: Proxy TheAPI)
     proxyCtx
-    (ntUser user) $ Repos.server :<|> OIDC.server :<|> Markdown.server :<|> Courses.server :<|> Backend.server :<|> serveDirectoryWebApp assetPath
+    (ntUser user) $ Repos.server :<|> OIDC.server :<|> (Markdown.server markdownPath) :<|> Courses.server :<|> Backend.server :<|> serveDirectoryWebApp assetPath
 
 -- https://nicolasurquiola.ar/blog/2023-10-28-generalised-auth-with-jwt-in-servant
 type AuthJwtCookie = AuthProtect "jwt-cookie"
@@ -204,8 +204,8 @@ type instance AuthServerData AuthJwtCookie = User
 nt :: AppCtx -> AppM a -> Servant.Server.Handler a
 nt s x = runReaderT (runApp x) s
 
-appWithContext :: FilePath -> AppCtx -> IO Application
-appWithContext assetPath ctx = do
+appWithContext :: FilePath -> FilePath -> AppCtx -> IO Application
+appWithContext assetPath markdownPath ctx = do
   let pool = getPool ctx
       myKey = _getSymmetricJWK ctx
       jwtCfg = SAS.defaultJWTSettings myKey
@@ -220,7 +220,7 @@ appWithContext assetPath ctx = do
           api
           proxyCtx
           (nt ctx')
-          (server assetPath)
+          (server assetPath markdownPath)
 
 -- | Generate a key suitable for use with 'defaultConfig' using file contents
 generateKeyFromFile :: String -> IO JWK
@@ -251,6 +251,9 @@ theApplicationWithSettings settings = do
   frontendPath <- lookupEnv "FRONTEND_PATH"
   let assetsDirectory = maybe (error "Missing FRONTEND_PATH in .env") id frontendPath
 
+  markdownPath <- lookupEnv "MARKDOWN_PATH"
+  let markdownDirectory = maybe (error "Missing MARKDOWN_PATH in .env") id markdownPath
+  
   mJsPath <- findFirstFileWithExtension assetsDirectory ".js"
   let jsFilename = maybe (error "Could not find .js file in assets") takeFileName mJsPath
   
@@ -290,4 +293,4 @@ theApplicationWithSettings settings = do
                         _getSymmetricJWK = symmetricJwk,
                         _getOidcEnvironment = oidcEnv}
 
-  appWithContext assetsDirectory context
+  appWithContext assetsDirectory markdownDirectory context
