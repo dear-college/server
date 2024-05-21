@@ -35,8 +35,6 @@ import AppM
 import Configuration
   ( Configuration (getRootURI),
     defaultConfiguration,
-    updateGithubAccessToken,
-    updateGithubRoot,
     updateRootURI,
     updateJavascriptPath,
     updateStylesheetPath,
@@ -152,11 +150,11 @@ server ::
     MonadCatch m,
     MonadRandom m
   ) => 
-  ServerT TheAuthAPI m
-server user = do
+  FilePath -> ServerT TheAuthAPI m
+server assetPath user = do
   hoistServerWithContext (Proxy :: Proxy TheAPI)
     proxyCtx
-    (ntUser user) $ Repos.server :<|> OIDC.server :<|> Markdown.server :<|> Courses.server :<|> Backend.server :<|> serveDirectoryWebApp "frontend/src/dist/assets"
+    (ntUser user) $ Repos.server :<|> OIDC.server :<|> Markdown.server :<|> Courses.server :<|> Backend.server :<|> serveDirectoryWebApp assetPath
 
 -- https://nicolasurquiola.ar/blog/2023-10-28-generalised-auth-with-jwt-in-servant
 type AuthJwtCookie = AuthProtect "jwt-cookie"
@@ -206,8 +204,8 @@ type instance AuthServerData AuthJwtCookie = User
 nt :: AppCtx -> AppM a -> Servant.Server.Handler a
 nt s x = runReaderT (runApp x) s
 
-appWithContext :: AppCtx -> IO Application
-appWithContext ctx = do
+appWithContext :: FilePath -> AppCtx -> IO Application
+appWithContext assetPath ctx = do
   let pool = getPool ctx
       myKey = _getSymmetricJWK ctx
       jwtCfg = SAS.defaultJWTSettings myKey
@@ -222,7 +220,7 @@ appWithContext ctx = do
           api
           proxyCtx
           (nt ctx')
-          server
+          (server assetPath)
 
 -- | Generate a key suitable for use with 'defaultConfig' using file contents
 generateKeyFromFile :: String -> IO JWK
@@ -234,17 +232,11 @@ generateKeyFromFile filename = do
 
 theApplicationWithSettings :: Settings -> IO Application
 theApplicationWithSettings settings = do
-  -- with this, lookupEnv will fetch from .env or from an environment variable
-  _ <- Configuration.Dotenv.loadFile Configuration.Dotenv.defaultConfig
-
   rootURI' <- lookupEnv "ROOT_URL"
   rootURI <- maybe (error "Could not parse $ROOT_URL") (pure . parseURI) rootURI'
 
   symmetricKeyFilename <- lookupEnv "SYMMETRIC_KEY"
   symmetricJwk <- maybe (error "Expected the file $SYMMETRIC_KEY to contain symmetric key material") generateKeyFromFile symmetricKeyFilename
-
-  root <- lookupEnv "GITHUB_ROOT"
-  accessToken <- lookupEnv "GITHUB_ACCESS_TOKEN"
 
   let packLookupEnv x = fmap C8.pack <$> lookupEnv x
   googleClientId <- packLookupEnv "GOOGLE_CLIENT_ID"
@@ -266,8 +258,6 @@ theApplicationWithSettings settings = do
   let cssFilename = maybe (error "Could not find .css file in assets") takeFileName mCssPath
 
   let config =
-        updateGithubRoot root $
-        updateGithubAccessToken accessToken $
         updateRootURI rootURI $
         updateJavascriptPath (Just jsFilename) $
         updateStylesheetPath (Just cssFilename) $
@@ -300,4 +290,4 @@ theApplicationWithSettings settings = do
                         _getSymmetricJWK = symmetricJwk,
                         _getOidcEnvironment = oidcEnv}
 
-  appWithContext context
+  appWithContext assetsDirectory context
