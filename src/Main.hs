@@ -21,10 +21,14 @@ import Network.Wai.Handler.Warp
 import Network.Wai.Logger (withStdoutLogger)
 import System.Environment (lookupEnv)
 
+import System.Directory (doesFileExist)
+import Control.Monad (when)
+
 main :: IO ()
 main = do
   -- with this, lookupEnv will fetch from .env or from an environment variable
-  _ <- Configuration.Dotenv.loadFile Configuration.Dotenv.defaultConfig
+  fileExists <- doesFileExist ".env"
+  _ <- when fileExists $ Configuration.Dotenv.loadFile Configuration.Dotenv.defaultConfig
 
   port <- lookupEnv "PORT"
   let settings = maybe id (setPort . read) port defaultSettings
