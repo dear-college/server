@@ -1,4 +1,4 @@
-# @dear.college/gradebook
+# @dear.college/client
 
 ## How to use this library
 
