@@ -24,30 +24,26 @@ module AppM
   )
 where
 
-import Configuration
-  ( Configuration (..),
-  )
+import Configuration (Configuration (..))
 import Control.Monad.Catch (MonadCatch, MonadThrow (..), catch)
 import Control.Monad.Except
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Reader
 import Control.Monad.State
+import Control.Monad.Time
 import Control.Monad.Trans.Reader (ReaderT, runReaderT)
 import Crypto.JOSE
+import Crypto.Random.Types (MonadRandom)
 import Data.ByteString
 import Data.Map (Map)
-import qualified Data.Map as Map
 import Data.Pool (Pool, withResource)
 import qualified Database.Redis as R
 import Network.Wai.Handler.Warp
 import OIDC.Types (OIDCEnv (..))
 import Servant.Auth.Server
 import Servant.Server
-import Web.OIDC.Client.Types (SessionStore)
-import Crypto.Random.Types (MonadRandom)
-import Control.Monad.Time
-
 import User
+import Web.OIDC.Client.Types (SessionStore)
 
 data AppCtx = AppCtx
   { _getConfiguration :: Configuration,
@@ -127,7 +123,7 @@ class HasUser a where
 
 instance HasUser AppCtx where
   getUser = _user
-  putUser u a = a { _user = u }
+  putUser u a = a {_user = u}
 
 instance MonadThrow AppM where
   throwM = AppM . liftIO . throwM
@@ -136,9 +132,8 @@ instance MonadCatch AppM where
   catch (AppM m) handler = AppM $ m `catch` (runApp . handler)
 
 instance MonadRandom AppM where
-  getRandomBytes  = liftIO .  getRandomBytes
+  getRandomBytes = liftIO . getRandomBytes
 
 instance MonadTime AppM where
   currentTime = liftIO currentTime
   monotonicTime = liftIO monotonicTime
-

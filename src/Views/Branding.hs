@@ -1,8 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Views.Branding
-  ( applicationName )
-where
+module Views.Branding (applicationName) where
 
 import Data.Text
 

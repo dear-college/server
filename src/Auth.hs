@@ -1,56 +1,55 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE InstanceSigs #-}
 
 module Auth where
 
+import Control.Lens
+import Crypto.JWT
+  ( Audience (..),
+    ClaimsSet,
+    HasClaimsSet (..),
+    NumericDate (..),
+    StringOrURI (..),
+    emptyClaimsSet,
+    stringOrUri,
+  )
 import Data.Aeson
-import qualified Data.Aeson as JSON
+import qualified Data.Aeson.KeyMap as M
 import qualified Data.Aeson.Types as AeT
-
 import Data.Function ((&))
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import qualified Data.Text
+import qualified Data.Text as Text
 import Data.Text.Encoding (encodeUtf8)
-import GHC.Generics ( Generic )
-
+import Data.Time.Clock (UTCTime, addUTCTime, getCurrentTime)
+import GHC.Generics (Generic)
+import Network.URI
+  ( parseURI,
+    parseURIReference,
+    relativeTo,
+    uriPath,
+    uriToString,
+  )
 import Servant
 import Servant.Auth.Server as SAS
 import Servant.Server
-
-import Crypto.JWT
-import Control.Lens
-
-import qualified Data.Aeson.KeyMap as M
-
-import qualified Web.OIDC.Client as O
-import Web.OIDC.Client.Tokens
-  ( IdTokenClaims (..),
-    Tokens (..),
-    validateIdToken,
-  )
+import User (Subscriber (..))
+import Web.OIDC.Client.Tokens (IdTokenClaims (..), Tokens (..), validateIdToken)
 import Web.OIDC.Client.Types (Code, SessionStore (..), State)
-
-import Crypto.JWT (HasClaimsSet(..), ClaimsSet, emptyClaimsSet, NumericDate (..), Audience (..), stringOrUri, StringOrURI(..) )
-import Control.Lens
-import Network.URI (parseURI, parseURIReference, uriPath, relativeTo, uriToString)
-import Data.Time.Clock (getCurrentTime, UTCTime, addUTCTime)
-
-import User (Subscriber(..))
-import qualified Data.Text as Text
 
 stripPathFromURI :: URI -> Maybe Text
 stripPathFromURI uri = do
-  let noPathUri = uri { uriPath = "", uriQuery = "", uriFragment = "" }
+  let noPathUri = uri {uriPath = "", uriQuery = "", uriFragment = ""}
   return . Text.pack $ uriToString id noPathUri ""
 
 data OtherClaims = OtherClaims
@@ -90,21 +89,23 @@ sessionClaims uri tokens = do
   let subAndIss = subscriber `relativeTo` issuer
   subAndIss' <- preview stringOrUri $ uriToString id subAndIss ""
   audience <- preview stringOrUri $ uriToString id uri ""
-  pure $ emptyClaimsSet
-     & claimSub ?~ subAndIss'
-     & claimAud ?~ Audience [audience]
-     & SessionClaims
+  pure $
+    emptyClaimsSet
+      & claimSub ?~ subAndIss'
+      & claimAud ?~ Audience [audience]
+      & SessionClaims
 
-data ToolClaims = ToolClaims { jwtClaims :: ClaimsSet, scope :: [Text] }
+data ToolClaims = ToolClaims {jwtClaims :: ClaimsSet, scope :: [Text]}
   deriving (Show)
 
 instance HasClaimsSet ToolClaims where
-  claimsSet f s = fmap (\a' -> s { jwtClaims = a' }) (f (jwtClaims s))
+  claimsSet f s = fmap (\a' -> s {jwtClaims = a'}) (f (jwtClaims s))
 
 instance FromJSON ToolClaims where
-  parseJSON = withObject "ToolClaims" $ \o -> ToolClaims
-    <$> parseJSON (Object o)
-    <*> o .: "scp"
+  parseJSON = withObject "ToolClaims" $ \o ->
+    ToolClaims
+      <$> parseJSON (Object o)
+      <*> o .: "scp"
 
 instance ToJSON ToolClaims where
   toJSON s =
@@ -118,8 +119,9 @@ toolClaims audience expiry (Subscriber sub) target = do
   target' <- stripPathFromURI target
   audience <- preview stringOrUri $ uriToString id audience ""
   sub' <- preview stringOrUri $ uriToString id sub ""
-  let claims = emptyClaimsSet
-        & claimSub ?~ sub'
-        & claimAud ?~ Audience [audience]
-        & claimExp ?~ NumericDate expiry
+  let claims =
+        emptyClaimsSet
+          & claimSub ?~ sub'
+          & claimAud ?~ Audience [audience]
+          & claimExp ?~ NumericDate expiry
   pure $ ToolClaims claims [target']

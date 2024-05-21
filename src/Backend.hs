@@ -2,14 +2,14 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE ViewPatterns #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module Backend
   ( API,
@@ -17,66 +17,53 @@ module Backend
   )
 where
 
-import AppM (AppM, HasConfiguration (..), MonadDB (..), MonadTime, getConfiguration, getJWK, getJwtSettings, HasUser(..), HasJwtSettings(..))
+import AppM
+  ( AppM,
+    HasConfiguration (..),
+    HasJwtSettings (..),
+    HasUser (..),
+    MonadDB (..),
+    MonadTime,
+    getConfiguration,
+    getJWK,
+    getJwtSettings,
+  )
+import Auth
 import Configuration
 import Control.Applicative
-import Control.Monad.Except (liftEither, runExceptT, throwError, MonadError)
+import Control.Lens
+import Control.Monad (replicateM_)
+import Control.Monad.Except (MonadError, liftEither, runExceptT, throwError)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader
+import Crypto.Hash (Digest, SHA256, digestFromByteString)
+import Crypto.JWT
 import Data.Aeson
-import GHC.Generics
 import Data.Aeson.Types (Parser)
+import Data.ByteArray.Encoding (Base (Base16), convertFromBase, convertToBase)
 import qualified Data.ByteString as BS
 import Data.ByteString.Char8 (pack)
+import qualified Data.ByteString.Lazy as LBS
 import Data.List (break)
 import Data.Maybe
 import Data.Pool (withResource)
 import Data.Text (Text)
 import qualified Data.Text as Text
-import qualified Database.Redis as R
+import Data.Text.Encoding (encodeUtf8)
+import qualified Data.Text.Lazy as TL
+import qualified Data.Text.Lazy.Encoding as TL
+import qualified Data.Text.Lazy.IO as TL
+import Data.Time.Clock (UTCTime, addUTCTime, getCurrentTime)
+import GHC.Generics
+import Model
+import Network.URI (URI, parseURI, uriToString)
 import Servant
+import Servant.Auth.Server.Internal.ConfigTypes
 import Servant.HTML.Blaze
 import Servant.Server
-import Text.Blaze.Html5 (ToMarkup, (!))
-import qualified Text.Blaze.Html5 as H
-import qualified Text.Blaze.Html5.Attributes as HA
-
-import Text.Blaze.Html5 (customAttribute)
-import Control.Monad (replicateM_)
-import Network.URI (uriToString)
-import qualified Data.ByteString.Lazy.Char8 as CL8
-import qualified Data.ByteString.Lazy as LBS
-import qualified Data.ByteString.Char8 as C8
-import qualified Data.ByteString as BS
-
-import Views.Page (partialPage)
+import Text.Blaze.Html5 (ToMarkup, customAttribute, (!))
 import User
-
-import Network.URI (URI, parseURI)
-import Data.Text (Text)
-import Data.Time.Clock (getCurrentTime, UTCTime, addUTCTime)
-import Crypto.JWT
-import Control.Lens
-import qualified Data.Aeson.KeyMap as M
-
-import Crypto.Hash (Digest, SHA256, digestFromByteString)
-import Data.ByteArray.Encoding (convertFromBase, convertToBase, Base(Base16))
-import qualified Data.ByteString.Char8 as C
-import Data.Text.Encoding (encodeUtf8)
-
-import qualified Data.ByteString.Lazy.UTF8 as LazyByteString
-import qualified Data.ByteString.UTF8 as ByteString
-
-import Servant.Auth.Server.Internal.ConfigTypes
-
-import qualified Data.Text.Lazy             as TL
-import qualified Data.Text.Lazy.Encoding    as TL
-import qualified Data.Text.Lazy.IO          as TL
-
-import Control.Monad.Except
-
-import Auth
-import Model
+import Views.Page (partialPage)
 
 instance (HashAlgorithm a) => FromHttpApiData (Digest a) where
   parseUrlPiece piece = do
@@ -97,10 +84,11 @@ instance FromHttpApiData URI where
 
 instance AsError Text where
   _Error = prism' embed match
-    where embed :: Error -> Text
-          embed e = Text.pack $ show e
-          match :: Text -> Maybe Error
-          match _ = Nothing
+    where
+      embed :: Error -> Text
+      embed e = Text.pack $ show e
+      match :: Text -> Maybe Error
+      match _ = Nothing
 
 instance FromHttpApiData SignedJWT where
   parseUrlPiece piece = do
@@ -109,9 +97,12 @@ instance FromHttpApiData SignedJWT where
       then decodeCompact $ LBS.fromStrict $ encodeUtf8 (Text.drop 7 s)
       else Left "should begin with Bearer"
 
-type CorsHeaders = '[Header "Access-Control-Allow-Origin" Text,
-                     Header "Access-Control-Allow-Credentials" Text,
-                     Header "Access-Control-Allow-Headers" Text]
+type CorsHeaders =
+  '[ Header "Access-Control-Allow-Origin" Text,
+     Header "Access-Control-Allow-Credentials" Text,
+     Header "Access-Control-Allow-Headers" Text
+   ]
+
 addCorsHeaders :: Maybe URI -> a -> Headers CorsHeaders a
 addCorsHeaders (Just uri) x = do
   let uri' = Text.pack $ uriToString id uri ""
@@ -120,10 +111,9 @@ addCorsHeaders Nothing x = do
   addHeader "*" $ addHeader "false" $ addHeader "" x
 
 type ProgressAPI =
-  (
-    (Verb 'OPTIONS 200 '[JSON] (Headers ((Header "Access-Control-Allow-Methods" Text) ': CorsHeaders) NoContent)) :<|>
-    (Get '[JSON] (Headers CorsHeaders Progress)) :<|>
-    (ReqBody '[JSON] Progress :> Put '[JSON] (Headers CorsHeaders NoContent))
+  ( (Verb 'OPTIONS 200 '[JSON] (Headers ((Header "Access-Control-Allow-Methods" Text) ': CorsHeaders) NoContent))
+      :<|> (Get '[JSON] (Headers CorsHeaders Progress))
+      :<|> (ReqBody '[JSON] Progress :> Put '[JSON] (Headers CorsHeaders NoContent))
   )
 
 type API = "api" :> "v1" :> "progress" :> Header "Origin" URI :> Header "Authorization" SignedJWT :> Header "X-Worksheet" Text :> Capture "sha" (Digest SHA256) :> ProgressAPI
@@ -138,20 +128,20 @@ server ::
     MonadError ServerError m,
     HasJwtSettings r,
     HasUser r
-  ) => 
+  ) =>
   ServerT API m
 server origin bearer (Just worksheet) sha = do
   let b = hashWith SHA256 $ encodeUtf8 worksheet
   let uri = parseURI $ Text.unpack worksheet
 
-  let ws = if (b == sha)
-        then case uri of
-          Just u -> Just $ Worksheet u worksheet b
-          Nothing -> Nothing
-        else Nothing
+  let ws =
+        if (b == sha)
+          then case uri of
+            Just u -> Just $ Worksheet u worksheet b
+            Nothing -> Nothing
+          else Nothing
 
   optionsProgress origin bearer :<|> getProgress ws origin bearer :<|> putProgress ws origin bearer
-
 server origin bearer Nothing sha =
   optionsProgress origin bearer :<|> getProgress Nothing origin bearer :<|> putProgress Nothing origin bearer
 
@@ -165,11 +155,13 @@ optionsProgress ::
     HasUser r,
     MonadError ServerError m
   ) =>
-    Maybe URI -> Maybe SignedJWT -> m (Headers ((Header "Access-Control-Allow-Methods" Text) ': CorsHeaders) NoContent)
+  Maybe URI ->
+  Maybe SignedJWT ->
+  m (Headers ((Header "Access-Control-Allow-Methods" Text) ': CorsHeaders) NoContent)
 optionsProgress (Just origin) _ = do
   pure $ addHeader "GET, PUT" $ addCorsHeaders (Just origin) $ NoContent
 optionsProgress Nothing _ = do
-  throwError $ err403 { errBody = "CORS requires an Origin header" }
+  throwError $ err403 {errBody = "CORS requires an Origin header"}
 
 tokenToUser ::
   ( MonadIO m,
@@ -181,8 +173,10 @@ tokenToUser ::
     MonadError ServerError m,
     HasJwtSettings r,
     HasUser r
-  ) => 
-  SignedJWT -> Worksheet -> m User
+  ) =>
+  SignedJWT ->
+  Worksheet ->
+  m User
 tokenToUser bearer worksheet = do
   jwk <- asks getJWK
   settings <- jwtSettingsToJwtValidationSettings <$> asks getJwtSettings
@@ -192,19 +186,19 @@ tokenToUser bearer worksheet = do
     pure tc
 
   case r of
-    Left e -> throwError $ err403 { errBody = "Invalid JWT: " <> (TL.encodeUtf8 $ TL.pack $ show e) }
-    Right claims ->  do
+    Left e -> throwError $ err403 {errBody = "Invalid JWT: " <> (TL.encodeUtf8 $ TL.pack $ show e)}
+    Right claims -> do
       let sub :: Maybe URI = preview (claimSub . _Just . uri) claims
       let user = case sub of
             Just s -> AuthenticatedUser (Subscriber $ s)
             Nothing -> Unauthenticated
       case listToMaybe $ scope claims of
-        Nothing -> throwError $ err403 { errBody = "Invalid JWT: Missing scope" }
+        Nothing -> throwError $ err403 {errBody = "Invalid JWT: Missing scope"}
         Just (s :: Text) -> do
           if worksheetMatchesScope worksheet s
             then do
               pure user
-            else throwError $ err403 { errBody = "Invalid JWT: Scope does not match" }
+            else throwError $ err403 {errBody = "Invalid JWT: Scope does not match"}
 
 getProgress ::
   ( MonadIO m,
@@ -216,15 +210,17 @@ getProgress ::
     MonadError ServerError m,
     HasJwtSettings r,
     HasUser r
-  ) => 
-  Maybe Worksheet -> Maybe URI -> Maybe SignedJWT -> m (Headers CorsHeaders Progress)
+  ) =>
+  Maybe Worksheet ->
+  Maybe URI ->
+  Maybe SignedJWT ->
+  m (Headers CorsHeaders Progress)
 getProgress (Just worksheet) origin (Just bearer) = do
   user <- tokenToUser bearer worksheet
   p <- readProgress user worksheet
   pure $ addCorsHeaders origin $ p
-
 getProgress _ _ _ = do
-  throwError $ err403 { errBody = "Missing fields" }
+  throwError $ err403 {errBody = "Missing fields"}
 
 putProgress ::
   ( MonadIO m,
@@ -236,11 +232,14 @@ putProgress ::
     MonadError ServerError m,
     HasJwtSettings r,
     HasUser r
-  ) => 
-  Maybe Worksheet -> Maybe URI -> Maybe SignedJWT -> Progress -> m (Headers CorsHeaders NoContent)
+  ) =>
+  Maybe Worksheet ->
+  Maybe URI ->
+  Maybe SignedJWT ->
+  Progress ->
+  m (Headers CorsHeaders NoContent)
 putProgress (Just worksheet) origin (Just bearer) progress = do
   user <- tokenToUser bearer worksheet
   _ <- writeProgress user worksheet progress
   pure $ addCorsHeaders origin $ NoContent
-
 putProgress _ _ _ progress = pure $ addCorsHeaders Nothing $ NoContent

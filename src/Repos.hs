@@ -15,35 +15,36 @@ module Repos
   )
 where
 
-import AppM (AppM, HasConfiguration (..), MonadDB (..), getConfiguration, getPool, HasUser(..))
+import AppM
+  ( AppM,
+    HasConfiguration (..),
+    HasUser (..),
+    MonadDB (..),
+    getConfiguration,
+    getPool,
+  )
 import Configuration
 import Control.Applicative
-import Control.Monad.Except (liftEither, runExceptT, throwError, MonadError)
+import Control.Monad (replicateM_)
+import Control.Monad.Except (MonadError, liftEither, runExceptT, throwError)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader
 import Data.Aeson
 import Data.Aeson.Types (Parser)
-import qualified Data.ByteString as BS
 import Data.ByteString.Char8 (pack)
 import Data.List (break)
 import Data.Maybe
 import Data.Pool (withResource)
 import Data.Text (Text)
-import qualified Data.Text as Text
-import qualified Database.Redis as R
+import Network.URI (uriToString)
 import Servant
 import Servant.HTML.Blaze
 import Servant.Server
-import Text.Blaze.Html5 (ToMarkup, (!))
+import Text.Blaze.Html5 (ToMarkup, customAttribute, (!))
 import qualified Text.Blaze.Html5 as H
 import qualified Text.Blaze.Html5.Attributes as HA
-
-import Text.Blaze.Html5 (customAttribute)
-import Control.Monad (replicateM_)
-import Network.URI (uriToString)
-
-import Views.Page (partialPage)
 import User
+import Views.Page (partialPage)
 
 xlinkHref = customAttribute "xlink:href"
 
@@ -76,7 +77,7 @@ server ::
     HasConfiguration r,
     MonadError ServerError m,
     HasUser r
-  ) => 
+  ) =>
   ServerT API m
 server = getBooks :<|> getSample
 
@@ -85,10 +86,8 @@ getBooks = pure Homepage
 
 getSample :: (MonadError ServerError m, MonadIO m, MonadDB m, MonadReader r m, HasConfiguration r, HasUser r) => m H.Html
 getSample = partialPage "Title" $ do
-             H.h1 "Templates!"
-             H.p "This will be type-checked, rendered and served"
-             H.p "Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum."
-             H.p "Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum."
-             H.p "Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum."
-
-
+  H.h1 "Templates!"
+  H.p "This will be type-checked, rendered and served"
+  H.p "Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum."
+  H.p "Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum."
+  H.p "Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum."

@@ -6,23 +6,20 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Views.Page
-  ( partialPage )
-where
+module Views.Page (partialPage) where
 
-import AppM (AppM, HasConfiguration (..), MonadDB (..), HasUser(..))
+import AppM (AppM, HasConfiguration (..), HasUser (..), MonadDB (..))
+import Configuration
 import Control.Monad.Except (MonadError)
 import Control.Monad.Reader
 import Data.Text (Text)
 import Servant
+import Text.Blaze.Html5 ((!))
 import qualified Text.Blaze.Html5 as H
 import qualified Text.Blaze.Html5.Attributes as HA
-import Text.Blaze.Html5 ((!))
-import Configuration
-
-import Views.Header (partialHeader)
-import Views.Footer (partialFooter)
 import Views.Branding
+import Views.Footer (partialFooter)
+import Views.Header (partialHeader)
 
 partialPage :: (MonadError ServerError m, MonadIO m, MonadDB m, MonadReader r m, HasConfiguration r, HasUser r) => Text -> H.Html -> m H.Html
 partialPage title body = do

@@ -1,34 +1,40 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE InstanceSigs #-}
 
 module OIDC (API (..), server) where
 
-import AppM (AppM, HasConfiguration (..), HasCookieSettings (..), HasJwtSettings (..), HasOidcEnvironment (..), MonadDB (..), getConfiguration, getPool)
+import AppM
+  ( AppM,
+    HasConfiguration (..),
+    HasCookieSettings (..),
+    HasJwtSettings (..),
+    HasOidcEnvironment (..),
+    MonadDB (..),
+    getConfiguration,
+    getPool,
+  )
+import Configuration (getRootURI)
+import Control.Lens
 import Control.Monad.Catch
-import Control.Monad.Except
 import Control.Monad.Error.Lens (throwing, throwing_)
-import Control.Monad.Except (liftEither, runExceptT, throwError)
+import Control.Monad.Except (MonadError, liftEither, runExceptT, throwError)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader
-import Data.Aeson
-  ( FromJSON (..),
-    ToJSON (..),
-    (.:),
-  )
+import Crypto.JWT
+import Data.Aeson (FromJSON (..), ToJSON (..), (.:))
 import qualified Data.Aeson as JSON
 import qualified Data.Aeson.Types as AeT
-import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as LBS
 import Data.Function ((&))
@@ -36,48 +42,37 @@ import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import qualified Data.Text
 import Data.Text.Encoding (encodeUtf8)
+import Data.Time.Clock (UTCTime, addUTCTime, getCurrentTime)
 import GHC.Generics
-import Network.HTTP.Client
-  ( Manager,
-    newManager,
-  )
-import Network.HTTP.Client.TLS
-  ( tlsManagerSettings,
+import Network.HTTP.Client (Manager, newManager)
+import Network.HTTP.Client.TLS (tlsManagerSettings)
+import Network.URI
+  ( parseURI,
+    parseURIReference,
+    relativeTo,
+    uriPath,
+    uriToString,
   )
 import OIDC.Types (OIDCConf (..), OIDCEnv (..), genRandomBS)
 import Servant
 import Servant.Auth.Server as SAS
-import Servant.HTML.Blaze
-  ( HTML,
+import Servant.Auth.Server.Internal.Cookie
+  ( applyCookieSettings,
+    applySessionCookieSettings,
+    makeSessionCookie,
   )
+import Servant.HTML.Blaze (HTML)
 import Servant.Server
-import qualified System.Random as Random
-import Text.Blaze
-  ( ToMarkup (..),
-  )
+import Text.Blaze (ToMarkup (..))
 import qualified Text.Blaze.Html as H
 import Text.Blaze.Html5 (ToMarkup, (!))
 import qualified Text.Blaze.Html5 as H
 import qualified Text.Blaze.Html5.Attributes as HA
 import Text.Blaze.Renderer.Utf8 (renderMarkup)
-import qualified Web.OIDC.Client as O
-import Web.OIDC.Client.Tokens
-import Web.OIDC.Client.Tokens
-  ( IdTokenClaims (..),
-    Tokens (..),
-    validateIdToken,
-  )
-import Web.OIDC.Client.Types (Code, SessionStore (..), State)
-
-import Crypto.JWT
-import Control.Lens
-import Network.URI (parseURI, parseURIReference, uriPath, relativeTo, uriToString)
-import Data.Time.Clock (getCurrentTime, UTCTime, addUTCTime)
-import Configuration (getRootURI)
-
-import Servant.Auth.Server.Internal.Cookie (makeSessionCookie, applyCookieSettings, applySessionCookieSettings)
-
 import Web.Cookie
+import qualified Web.OIDC.Client as O
+import Web.OIDC.Client.Tokens (IdTokenClaims (..), Tokens (..), validateIdToken)
+import Web.OIDC.Client.Types (Code, SessionStore (..), State)
 
 instance FromHttpApiData C8.ByteString where
   parseUrlPiece = Right . C8.pack . Data.Text.unpack
@@ -85,12 +80,13 @@ instance FromHttpApiData C8.ByteString where
   parseQueryParam = Right . C8.pack . Data.Text.unpack
 
 type API =
-  ("login"
-    :> ( -- redirect User to the OpenID Provider
-         Get '[JSON] NoContent
-           -- render the page that will save the user creds in the user-agent
-           :<|> ("cb" :> QueryParam "error" Text :> QueryParam "code" Code :> QueryParam "state" State :> Get '[HTML] (Headers '[Header "Set-Cookie" SetCookie] String))
-       ))
+  ( "login"
+      :> ( -- redirect User to the OpenID Provider
+           Get '[JSON] NoContent
+             -- render the page that will save the user creds in the user-agent
+             :<|> ("cb" :> QueryParam "error" Text :> QueryParam "code" Code :> QueryParam "state" State :> Get '[HTML] (Headers '[Header "Set-Cookie" SetCookie] String))
+         )
+  )
     :<|> ("logout" :> Get '[HTML] (Headers '[Header "Set-Cookie" SetCookie] NoContent))
 
 redirects :: (MonadError ServerError m) => String -> m ()
@@ -198,18 +194,20 @@ sessionClaims uri tokens expiry = do
   let subAndIss = subscriber `relativeTo` issuer
   subAndIss' <- preview stringOrUri $ uriToString id subAndIss ""
   audience <- preview stringOrUri $ uriToString id uri ""
-  pure $ emptyClaimsSet
-     & claimSub ?~ subAndIss'
-     & claimAud ?~ Audience [audience]
-     & claimExp ?~ NumericDate expiry
-     & SessionClaims
+  pure $
+    emptyClaimsSet
+      & claimSub ?~ subAndIss'
+      & claimAud ?~ Audience [audience]
+      & claimExp ?~ NumericDate expiry
+      & SessionClaims
 
 instance AsError ServerError where
   _Error = prism' embed match
-    where embed :: Error -> ServerError
-          embed _ = err500
-          match :: ServerError -> Maybe Error
-          match _ = Nothing
+    where
+      embed :: Error -> ServerError
+      embed _ = err500
+      match :: ServerError -> Maybe Error
+      match _ = Nothing
 
 handleLoggedIn ::
   ( MonadIO m,
@@ -236,7 +234,7 @@ handleLoggedIn handleSuccessfulId err mcode mstate = do
   oidcenv <- asks getOidcEnvironment
   jwtSettings <- asks getJwtSettings
   jwk <- asks getJWK
-  cookieSettings <- asks getCookieSettings  
+  cookieSettings <- asks getCookieSettings
   state <- maybe (forbidden "Missing state") pure mstate
   code <- maybe (forbidden "Missing code") pure mcode
 
@@ -256,12 +254,13 @@ handleLoggedIn handleSuccessfulId err mcode mstate = do
         Just claims -> do
           liftIO $ print claims
           bestAlg <- bestJWSAlg jwk
-          let bestHeader = newJWSHeader ((),bestAlg)
+          let bestHeader = newJWSHeader ((), bestAlg)
           mJWT <- signJWT jwk bestHeader claims
           let bs = encodeCompact mJWT
-          let cookie = applySessionCookieSettings cookieSettings
-                           $ applyCookieSettings cookieSettings
-                           $ def{ setCookieValue = LBS.toStrict bs }
+          let cookie =
+                applySessionCookieSettings cookieSettings $
+                  applyCookieSettings cookieSettings $
+                    def {setCookieValue = LBS.toStrict bs}
           return $ (addHeader cookie) (show "cookie set")
 
 -- case err of
@@ -325,7 +324,7 @@ handleLogout = do
   -- cf. https://github.com/haskell-servant/servant-auth/issues/127
   let clearedSessionCookie = applySessionCookieSettings cookieSettings $ applyCookieSettings cookieSettings def
   -- TODO: A bit frustrating, but I can't seem to redirect and also set a cookie without using throwError?
-  throwError $ err302 { errHeaders = [("Location", "/sample"), ("Set-Cookie", renderSetCookieBS clearedSessionCookie)] }
+  throwError $ err302 {errHeaders = [("Location", "/sample"), ("Set-Cookie", renderSetCookieBS clearedSessionCookie)]}
 
 server ::
   ( MonadIO m,

@@ -15,27 +15,32 @@ module Markdown
   )
 where
 
-import AppM (AppM, HasConfiguration (..), MonadDB (..), getConfiguration, getPool, HasUser(..))
+import AppM
+  ( AppM,
+    HasConfiguration (..),
+    HasUser (..),
+    MonadDB (..),
+    getConfiguration,
+    getPool,
+  )
+import CMark (commonmarkToHtml)
 import Control.Monad.Except (MonadError)
 import Control.Monad.Reader
 import Data.Maybe
 import Data.Text (Text)
+import qualified Data.Text.IO as TIO
 import Servant
 import Servant.HTML.Blaze
-import qualified Text.Blaze.Html5 as H
-
-import Views.Page (partialPage)
-import CMark (commonmarkToHtml)
-import qualified Data.Text.IO as TIO
-
-import Text.HTML.TagSoup
 import System.FilePath ((</>))
+import qualified Text.Blaze.Html5 as H
+import Text.HTML.TagSoup
+import Views.Page (partialPage)
 
 -- Extract text from the first <h1> tag using partitions
 extractH1 :: Text -> Maybe Text
 extractH1 html = case partitions (isTagOpenName "h1") (parseTags html) of
-    [] -> Nothing
-    (x:_) -> Just (innerText $ takeWhile (not . isTagCloseName "h1") x)
+  [] -> Nothing
+  (x : _) -> Just (innerText $ takeWhile (not . isTagCloseName "h1") x)
 
 type API = "readme" :> (Get '[HTML] H.Html)
 
@@ -55,7 +60,7 @@ server ::
     HasConfiguration r,
     MonadError ServerError m,
     HasUser r
-  ) => 
-  FilePath -> ServerT API m
+  ) =>
+  FilePath ->
+  ServerT API m
 server root = render (root </> "README.md")
-

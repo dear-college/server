@@ -11,6 +11,7 @@ module Main (main) where
 
 import App (theApplicationWithSettings)
 import Configuration.Dotenv (defaultConfig, loadFile)
+import Control.Monad (when)
 import Network.Wai.Handler.Warp
   ( defaultSettings,
     getPort,
@@ -19,10 +20,8 @@ import Network.Wai.Handler.Warp
     setPort,
   )
 import Network.Wai.Logger (withStdoutLogger)
-import System.Environment (lookupEnv)
-
 import System.Directory (doesFileExist)
-import Control.Monad (when)
+import System.Environment (lookupEnv)
 
 main :: IO ()
 main = do

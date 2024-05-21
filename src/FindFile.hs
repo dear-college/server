@@ -1,10 +1,8 @@
-module FindFile
-  ( findFirstFileWithExtension )
-where
+module FindFile (findFirstFileWithExtension) where
 
-import System.Directory (listDirectory)
-import System.FilePath ((</>), takeExtension)
 import Data.List (find)
+import System.Directory (listDirectory)
+import System.FilePath (takeExtension, (</>))
 
 -- Find the first file with the given extension in the specified directory
 findFirstFileWithExtension :: FilePath -> String -> IO (Maybe FilePath)

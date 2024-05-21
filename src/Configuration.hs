@@ -1,11 +1,9 @@
 module Configuration where
 
-import qualified Data.ByteString as BS
 import Network.URI (URI (..))
 
 data Configuration = Configuration
-  {
-    getRootURI :: URI,
+  { getRootURI :: URI,
     getJavascriptPath :: FilePath,
     getStylesheetPath :: FilePath
   }
@@ -14,8 +12,7 @@ data Configuration = Configuration
 defaultConfiguration :: Configuration
 defaultConfiguration =
   Configuration
-    { 
-      getJavascriptPath = "main.js",
+    { getJavascriptPath = "main.js",
       getStylesheetPath = "main.css"
     }
 
