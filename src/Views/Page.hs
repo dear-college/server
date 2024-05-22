@@ -10,7 +10,7 @@ module Views.Page (partialPage) where
 
 import Control.Monad.Except (MonadError)
 import Control.Monad.Reader
-import Data.Text (Text)
+import Data.Text (Text, pack)
 import Servant
 import qualified Text.Blaze.Html5 as H
 import Text.Blaze.Html5 ((!))
@@ -37,7 +37,7 @@ partialPage title body = do
         H.meta ! HA.name "viewport" ! HA.content "width=device-width, initial-scale=1"
         H.link ! HA.rel "stylesheet" ! HA.type_ "text/css" ! HA.href ("/" <> cssPath)
         H.script ! HA.type_ "text/javascript" ! HA.src ("/" <> jsPath) $ ""
-        H.title $ H.toHtml (title <> " - " <> applicationName)
+        H.title $ H.toHtml (title <> " - " <> (pack $ getWebsiteName config))
       H.body ! HA.class_ "d-flex flex-column h-100" $ do
         H.header $ do
           header
