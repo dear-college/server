@@ -64,38 +64,7 @@ import Servant.Server
 import Text.Blaze.Html5 (ToMarkup, customAttribute, (!))
 import User
 import Views.Page (partialPage)
-
-instance (HashAlgorithm a) => FromHttpApiData (Digest a) where
-  parseUrlPiece piece = do
-    (s :: Text) <- parseUrlPiece piece
-    let bs :: BS.ByteString = encodeUtf8 s
-    case convertFromBase Base16 (bs :: BS.ByteString) of
-      Left s -> Left $ Text.pack s
-      Right (b :: BS.ByteString) -> case digestFromByteString b of
-        Nothing -> Left "Could not convert byte string to digest"
-        Just digest -> Right $ digest
-
-instance FromHttpApiData URI where
-  parseUrlPiece piece = do
-    (s :: Text) <- parseUrlPiece piece
-    case parseURI $ Text.unpack s of
-      Nothing -> Left "could not parse URI"
-      Just s -> Right s
-
-instance AsError Text where
-  _Error = prism' embed match
-    where
-      embed :: Error -> Text
-      embed e = Text.pack $ show e
-      match :: Text -> Maybe Error
-      match _ = Nothing
-
-instance FromHttpApiData SignedJWT where
-  parseUrlPiece piece = do
-    (s :: Text) <- parseUrlPiece piece
-    if "Bearer " `Text.isPrefixOf` s
-      then decodeCompact $ LBS.fromStrict $ encodeUtf8 (Text.drop 7 s)
-      else Left "should begin with Bearer"
+import HttpData
 
 type CorsHeaders =
   '[ Header "Access-Control-Allow-Origin" Text,

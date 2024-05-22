@@ -110,6 +110,7 @@ import System.Environment (lookupEnv)
 import System.FilePath (takeFileName)
 import User
 import Web.Cookie (parseCookies)
+import HttpData
 
 ntUser :: forall a r m. (MonadReader r m, HasUser r) => User -> m a -> m a
 ntUser user = local (putUser user)

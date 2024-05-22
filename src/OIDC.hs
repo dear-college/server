@@ -35,8 +35,8 @@ import Crypto.JWT
 import Data.Aeson (FromJSON (..), ToJSON (..), (.:))
 import qualified Data.Aeson as JSON
 import qualified Data.Aeson.Types as AeT
-import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as LBS
+import qualified Data.ByteString.Char8 as C8
 import Data.Function ((&))
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
@@ -74,17 +74,12 @@ import qualified Web.OIDC.Client as O
 import Web.OIDC.Client.Tokens (IdTokenClaims (..), Tokens (..), validateIdToken)
 import Web.OIDC.Client.Types (Code, SessionStore (..), State)
 
-instance FromHttpApiData C8.ByteString where
-  parseUrlPiece = Right . C8.pack . Data.Text.unpack
-  parseHeader = Right
-  parseQueryParam = Right . C8.pack . Data.Text.unpack
-
 type API =
   ( "login"
       :> ( -- redirect User to the OpenID Provider
-           Get '[JSON] NoContent
+           (Header "Referer" URI :> Get '[JSON] NoContent)
              -- render the page that will save the user creds in the user-agent
-             :<|> ("cb" :> QueryParam "error" Text :> QueryParam "code" Code :> QueryParam "state" State :> Get '[HTML] (Headers '[Header "Set-Cookie" SetCookie] String))
+             :<|> ("cb" :> QueryParam "error" Text :> QueryParam "code" Code :> QueryParam "state" State :> Get '[HTML] (Headers '[Header "Set-Cookie" SetCookie] NoContent))
          )
   )
     :<|> ("logout" :> Get '[HTML] (Headers '[Header "Set-Cookie" SetCookie] NoContent))
@@ -110,12 +105,24 @@ handleLogin ::
     MonadError ServerError m,
     MonadCatch m
   ) =>
-  m NoContent
-handleLogin = do
+  Maybe URI -> m NoContent
+handleLogin uri = do
   oidcenv <- asks getOidcEnvironment
   let conf = oidcConf oidcenv
   let oidcCreds = O.setCredentials (clientId conf) (clientSecret conf) (redirectUri conf) (O.newOIDC $ prov oidcenv)
-  loc <- O.prepareAuthenticationRequestUrl sessionStore oidcCreds [O.openId, O.email, O.profile] []
+
+  let store = sessionStore
+  state <- sessionStoreGenerate store
+  nonce' <- sessionStoreGenerate store
+  sessionStoreSave store state nonce'
+  let scope = [O.openId, O.email, O.profile]
+  loc <- O.getAuthenticationRequestUrl oidcCreds scope (Just state) [("nonce", Just nonce')]
+
+  let uri' = (\u -> C8.pack $ uriToString id u "") <$> uri
+  _ <- case uri' of
+    Just u -> rset ("redirect:" <> state) u *> expire state 300 *> pure ()
+    Nothing -> pure ()
+  
   redirects (show loc)
   return NoContent
 
@@ -229,7 +236,7 @@ handleLoggedIn ::
   Maybe Code ->
   -- | state
   Maybe State ->
-  m (Headers '[Header "Set-Cookie" SetCookie] String)
+  m (Headers '[Header "Set-Cookie" SetCookie] NoContent)
 handleLoggedIn handleSuccessfulId err mcode mstate = do
   oidcenv <- asks getOidcEnvironment
   jwtSettings <- asks getJwtSettings
@@ -244,6 +251,12 @@ handleLoggedIn handleSuccessfulId err mcode mstate = do
 
   audience <- asks (getRootURI . getConfiguration)
 
+  -- fetch the URL from which we clicked 'login'
+  root <- asks (getRootURI . getConfiguration)
+  let root' :: C8.ByteString = C8.pack $ uriToString id root ""
+  referer <- rget ("redirect:" <> state) >>= return . either (const Nothing) id
+  let referer' = fromMaybe root' referer
+  
   case err of
     Just errorMsg -> forbidden errorMsg
     Nothing -> do
@@ -261,28 +274,8 @@ handleLoggedIn handleSuccessfulId err mcode mstate = do
                 applySessionCookieSettings cookieSettings $
                   applyCookieSettings cookieSettings $
                     def {setCookieValue = LBS.toStrict bs}
-          return $ (addHeader cookie) (show "cookie set")
-
--- case err of
---   Just errorMsg -> forbidden errorMsg
---   Nothing -> case mcode of
---     Just oauthCode -> do
---       tokens <- liftIO $ O.requestTokens (oidc oidcenv) Nothing (encodeUtf8 oauthCode) (mgr oidcenv)
---       --putText . show . O.claims . O.idToken $ tokens
---       --let jwt = toS . unJwt . O.jwt . O.idToken $ tokens
---       let jwt = O.idToken tokens
---       let eAuthInfo = O.validateIdToken :: Either O.JwtError (O.JwtHeader,AuthInfo)
---       case eAuthInfo of
---         Left jwtErr -> forbidden $ "JWT decode/check problem: " <> show jwtErr
---         Right (_,authInfo) ->
---           if emailVerified authInfo
---             then do
---               user <- liftIO $ handleSuccessfulId authInfo
---               either forbidden return user
---             else forbidden "Please verify your email"
---     Nothing -> do
---       liftIO $ putStrLn "No code param"
---       forbidden "no code parameter given"
+          throwError $ err302 {errHeaders = [("Location", referer'), ("Set-Cookie", renderSetCookieBS cookie)]}                    
+          return $ (addHeader cookie) NoContent
 
 instance ToMarkup User where
   toMarkup User {..} = H.docTypeHtml $ do
