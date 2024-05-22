@@ -105,7 +105,7 @@ redirectToContentWithUser Unauthenticated (Slug text) uri = do
         H.preEscapedString "&rdquo;"      
       H.div ! HA.class_ "col-lg-6 mx-auto" $ do
         H.p ! HA.class_ "lead mb-4" $ do
-          "You have not yet logged in.  Please log in and then you will be directed to "
+          "You have not yet logged in.  Please log in and then you will be redirected to "
           H.code (H.toHtml $ show uri)
         H.div ! HA.class_ "d-grid gap-2 d-sm-flex justify-content-sm-center" $ do
           H.a ! HA.href "/login" ! HA.class_ "btn btn-primary btn-lg px-4 gap-3" $ "Login"          
