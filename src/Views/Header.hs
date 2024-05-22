@@ -39,7 +39,6 @@ import AppM
 import Configuration
 import User
 import Views.A11y
-import Views.Branding (applicationName)
 
 xlinkHref = customAttribute "xlink:href"
 
@@ -64,7 +63,7 @@ partialHeader = do
     H.header $ do
       H.nav ! HA.class_ "navbar navbar-expand-md navbar-dark fixed-top bg-dark" $ do
         H.div ! HA.class_ "container-fluid" $ do
-          H.a ! HA.class_ "navbar-brand" ! HA.href (H.stringValue root') $ H.toHtml applicationName
+          H.a ! HA.class_ "navbar-brand" ! HA.href (H.stringValue root') $ H.toHtml (getWebsiteName config)
           H.button
             ! HA.class_ "navbar-toggler"
             ! HA.type_ "button"
@@ -81,7 +80,7 @@ partialHeader = do
                 $ H.a
                   ! HA.class_ "nav-link active"
                   ! ariaCurrent "page"
-                  ! HA.href "#"
+                  ! HA.href "/"
                 $ "Home"
               H.li ! HA.class_ "nav-item"
                 $ H.a

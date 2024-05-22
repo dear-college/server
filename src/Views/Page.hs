@@ -18,7 +18,6 @@ import qualified Text.Blaze.Html5.Attributes as HA
 
 import AppM (AppM, HasConfiguration(..), HasUser(..), MonadDB(..))
 import Configuration
-import Views.Branding
 import Views.Footer (partialFooter)
 import Views.Header (partialHeader)
 

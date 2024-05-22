@@ -41,7 +41,6 @@ import qualified Text.Blaze.Html5.Attributes as HA
 import AppM (AppM, HasConfiguration(..), MonadDB(..), getConfiguration, getPool)
 import Configuration
 import Views.A11y
-import Views.Branding
 
 getCurrentYear :: IO Integer
 getCurrentYear = do

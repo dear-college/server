@@ -35,7 +35,7 @@ import qualified Text.Blaze.Html5.Attributes as HA
 import Text.Blaze.Html5 ((!))
 import Text.HTML.TagSoup
 import Views.Page (partialPage)
-
+import Configuration
 import User
 
 -- Extract text from the first <h1> tag using partitions
@@ -48,6 +48,8 @@ type API = (Get '[HTML] H.Html) :<|> "readme" :> (Get '[HTML] H.Html)
 
 landingPage :: (MonadError ServerError m, MonadIO m, MonadDB m, MonadReader r m, HasConfiguration r, HasUser r) => m H.Html
 landingPage = do
+  websiteName <- asks (getWebsiteName . getConfiguration)
+ 
   user <- asks getUser
   bigButton <- case user of
     AuthenticatedUser _ -> pure $ do
@@ -57,7 +59,7 @@ landingPage = do
 
   partialPage "/" $ do
     H.div ! HA.class_ "px-4 py-5 my-5 text-center" $ do
-      H.h1 ! HA.class_ "display-5 fw-bold text-body-emphasis" $ "dear.college"
+      H.h1 ! HA.class_ "display-5 fw-bold text-body-emphasis" $ H.toHtml websiteName
       H.div ! HA.class_ "col-lg-6 mx-auto" $ do
         H.p ! HA.class_ "lead mb-4" $ do
           "This is your "
