@@ -46,13 +46,19 @@ export async function fetchWithJwt( location, url, params ) {
   let sha = await hashHex(location);
   let aud = claims.aud;
 
-  const absoluteUrl = new URL(url + `/${sha}`, aud);
+  const relativeUrl = url + `/${sha}`;
+  const absoluteUrl = new URL(relativeUrl, aud);
 
   try {
     params.headers['Authorization'] = `Bearer ${jwt}`;
     params.credentials = 'include';
     params.headers['Worksheet'] = location;
 
+    if (params.headers['JSON-Work-Proof']) {
+      const jwp = new JWP();
+      const token = await jwp.generate({ sub: relativeUrl });
+      params.headers['JSON-Work-Proof'] = token;
+    }
     return await fetch(absoluteUrl, params);
   } catch (error) {
     console.error('Fetch error:', error);
@@ -117,14 +123,12 @@ export async function getState( location = undefined ) {
 export async function putState( state, location = undefined ) {
   if (location === undefined) location = window.location.href;
 
-  const jwp = new JWP();
-
   const response = await fetchWithJwt( location, `/api/v1/state`, {
     method: 'PUT',
     headers: {
       'Accept': 'application/json',
       'Content-Type': 'application/json',
-      'JSON-Work-Proof': jwp
+      'JSON-Work-Proof': true
     },
     body: JSON.stringify(state)
   });
