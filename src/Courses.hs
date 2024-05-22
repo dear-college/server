@@ -52,6 +52,7 @@ import Servant.HTML.Blaze
 import Servant.Server
 import Text.Blaze.Html5 (ToMarkup, customAttribute, (!))
 import qualified Text.Blaze.Html5 as H
+import qualified Text.Blaze.Html5.Attributes as HA
 import User
 import Views.Page (partialPage)
 
@@ -94,10 +95,21 @@ instance AsError ServerError where
       match _ = Nothing
 
 redirectToContentWithUser :: (MonadError ServerError m, MonadRandom m, MonadIO m, MonadDB m, MonadReader r m, HasJwtSettings r, HasConfiguration r, HasUser r) => User -> Slug -> URI -> m H.Html
-redirectToContentWithUser Unauthenticated _ _ = do
-  partialPage "not logged in" $ do
-    H.h1 "Not logged in"
-    H.p "Log in first, then go back and try again."
+redirectToContentWithUser Unauthenticated (Slug text) uri = do
+  partialPage "join" $ do
+    H.div ! HA.class_ "px-4 py-5 my-5 text-center" $ do
+      H.h1 ! HA.class_ "display-5 fw-bold text-body-emphasis" $ do
+        "Join "
+        H.preEscapedString "&ldquo;"
+        H.toHtml text
+        H.preEscapedString "&rdquo;"      
+      H.div ! HA.class_ "col-lg-6 mx-auto" $ do
+        H.p ! HA.class_ "lead mb-4" $ do
+          "You have not yet logged in.  Please log in and then you will be directed to "
+          H.code (H.toHtml $ show uri)
+        H.div ! HA.class_ "d-grid gap-2 d-sm-flex justify-content-sm-center" $ do
+          H.a ! HA.href "/login" ! HA.class_ "btn btn-primary btn-lg px-4 gap-3" $ "Login"          
+
 redirectToContentWithUser (AuthenticatedUser user) slug uri = do
   -- TODO: When should the tokens expire?
   issuedAt <- liftIO getCurrentTime
