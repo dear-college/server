@@ -16,12 +16,10 @@ module Markdown
 where
 
 import AppM
-  ( AppM,
+  (
     HasConfiguration (..),
     HasUser (..),
     MonadDB (..),
-    getConfiguration,
-    getPool,
   )
 import CMark (commonmarkToHtml)
 import Control.Monad.Except (MonadError)
@@ -33,6 +31,8 @@ import Servant
 import Servant.HTML.Blaze
 import System.FilePath ((</>))
 import qualified Text.Blaze.Html5 as H
+import qualified Text.Blaze.Html5.Attributes as HA
+import Text.Blaze.Html5 ((!))
 import Text.HTML.TagSoup
 import Views.Page (partialPage)
 
@@ -47,8 +47,24 @@ type API = (Get '[HTML] H.Html) :<|> "readme" :> (Get '[HTML] H.Html)
 landingPage :: (MonadError ServerError m, MonadIO m, MonadDB m, MonadReader r m, HasConfiguration r, HasUser r) => m H.Html
 landingPage = do
   partialPage "/" $ do
-    H.h1 "Hello!"
-   
+    H.div ! HA.class_ "px-4 py-5 my-5 text-center" $ do
+      H.h1 ! HA.class_ "display-5 fw-bold text-body-emphasis" $ "dear.college"
+      H.div ! HA.class_ "col-lg-6 mx-auto" $ do
+        H.p ! HA.class_ "lead mb-4" $ do
+          "This is your "
+          H.strong "decentralized gradebook"
+          ": instructors and students can log in to track their progress across other websites.  Your website can use our API to read and write student scores without the complexity of LTI."
+        H.p ! HA.class_ "lead mb-4" $ do
+          "It's like adding "
+          H.preEscapedString "&ldquo;"
+          "Name: "
+          H.span ! HA.style "text-decoration: underline;" $ H.preEscapedString "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"
+          H.preEscapedString "&rdquo;"
+          " to every website on the Internet."
+        H.div ! HA.class_ "d-grid gap-2 d-sm-flex justify-content-sm-center" $ do
+          H.button ! HA.type_ "button" ! HA.class_ "btn btn-primary btn-lg px-4 gap-3" $ "Login"
+          H.button ! HA.type_ "button" ! HA.class_ "btn btn-outline-secondary btn-lg px-4" $ "Learn More"
+
 render :: (MonadError ServerError m, MonadIO m, MonadDB m, MonadReader r m, HasConfiguration r, HasUser r) => FilePath -> m H.Html
 render filename = do
   content <- liftIO $ TIO.readFile filename
