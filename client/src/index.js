@@ -1,5 +1,6 @@
 import packageInfo from '../package.json';
 import * as jose from 'jose';
+import * as JWP from 'json-work-proof';
 
 console.log(`@dear.college/client version ${packageInfo.version}`);
 
@@ -37,73 +38,100 @@ async function hashHex(text) {
   return bufferToHex(await crypto.subtle.digest('SHA-256', encoder.encode(text)));
 }
 
-export async function getProgress( location = undefined ) {
-  if (location === undefined) location = window.location.href;
-
+export async function fetchWithJwt( location, url, params ) {
   let jwt = localStorage.getItem("dear.college/jwt");
   if (jwt === null) throw new Error('not logged in');
-  
+
   let claims = jose.decodeJwt(jwt);
   let sha = await hashHex(location);
   let aud = claims.aud;
 
-  const url = new URL(`/api/v1/progress/${sha}`, aud);
+  const absoluteUrl = new URL(url + `/${sha}`, aud);
 
   try {
-    const response = await fetch(url, {
-      method: 'GET',
-      credentials: 'include',
-      headers: {
-        'Authorization': `Bearer ${jwt}`,
-        'X-Worksheet': location,
-        'Accept': 'application/json'
-      }
-    });
+    params.headers['Authorization'] = `Bearer ${jwt}`;
+    params.credentials = 'include';
+    params.headers['Worksheet'] = location;
 
-    if (response.ok) {
-      let result = await response.json();
-      return result.hasOwnProperty('progress') ? parseFloat(result.progress) : NaN;
-    } else {
-      throw new Error(`Failed to fetch: ${response.status} ${response.statusText}`);
-    }
+    return await fetch(absoluteUrl, params);
   } catch (error) {
     console.error('Fetch error:', error);
     throw error;
   }
 }
 
+export async function getProgress( location = undefined ) {
+  if (location === undefined) location = window.location.href;
+
+  const response = await fetchWithJwt( location, `/api/v1/progress`, {
+    method: 'GET',
+    headers: {
+      'Accept': 'application/json'
+    }
+  });
+
+  if (response.ok) {
+    let result = await response.json();
+    return result.hasOwnProperty('progress') ? parseFloat(result.progress) : NaN;
+  } else {
+    throw new Error(`Failed to fetch: ${response.status} ${response.statusText}`);
+  }
+}
+
 export async function putProgress( progress = 1.0, location = undefined ) {
   if (location === undefined) location = window.location.href;
 
-  let jwt = localStorage.getItem("dear.college/jwt");
-  if (jwt === null) throw new Error('not logged in');
-  
-  let claims = jose.decodeJwt(jwt);
-  let sha = await hashHex(location);
-  let aud = claims.aud;
+  const response = await fetchWithJwt( location, `/api/v1/progress`, {
+    method: 'PUT',
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({progress: progress})
+  });
 
-  const url = new URL(`/api/v1/progress/${sha}`, aud);
-  
-  try {
-    const response = await fetch(url, {
-      method: 'PUT',
-      credentials: 'include',
-      headers: {
-        'Authorization': `Bearer ${jwt}`,
-        'X-Worksheet': location,
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({progress: progress})
-    });
+  if (response.ok) {
+    return;
+  } else {
+    throw new Error(`Failed to fetch: ${response.status} ${response.statusText}`);
+  }
+}
 
-    if (response.ok) {
-      return;
-    } else {
-      throw new Error(`Failed to fetch: ${response.status} ${response.statusText}`);
+export async function getState( location = undefined ) {
+  if (location === undefined) location = window.location.href;
+
+  const response = await fetchWithJwt( location, `/api/v1/state`, {
+    method: 'GET',
+    headers: {
+      'Accept': 'application/json'
     }
-  } catch (error) {
-    console.error('Fetch error:', error);
-    throw error;
+  });
+
+  if (response.ok) {
+    return await response.json();
+  } else {
+    throw new Error(`Failed to fetch: ${response.status} ${response.statusText}`);
+  }
+}
+
+export async function putState( state, location = undefined ) {
+  if (location === undefined) location = window.location.href;
+
+  const jwp = new JWP();
+
+  const response = await fetchWithJwt( location, `/api/v1/state`, {
+    method: 'PUT',
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+      'JSON-Work-Proof': jwp
+    },
+    body: JSON.stringify(state)
+  });
+
+  if (response.ok) {
+    return;
+  } else {
+    throw new Error(`Failed to fetch: ${response.status} ${response.statusText}`);
   }
 }
