@@ -55,7 +55,7 @@ export async function fetchWithJwt( location, url, params ) {
     params.headers['Worksheet'] = location;
 
     if (params.headers['JSON-Work-Proof']) {
-      const jwp = new JWP();
+      const jwp = new JWP(16);
       const token = await jwp.generate({ sub: relativeUrl });
       params.headers['JSON-Work-Proof'] = token;
     }

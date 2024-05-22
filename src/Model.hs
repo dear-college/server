@@ -17,6 +17,8 @@ module Model
     worksheetMatchesScope,
     readProgress,
     writeProgress,
+    readState,
+    writeState,
   )
 where
 
@@ -56,6 +58,15 @@ import Servant.HTML.Blaze
 import Servant.Server
 import Text.Blaze.Html5 (ToMarkup, customAttribute, (!))
 import User
+
+import Data.Aeson (encode, Value)
+import qualified Data.ByteString.Lazy as BL
+import Codec.Compression.GZip (compress)
+import Data.Aeson (decode, eitherDecode)
+import Data.ByteString.Lazy as BL
+import Codec.Compression.GZip (decompress)
+import Control.Exception (catch, SomeException, throwIO)
+import Control.Monad (unless)
 
 newtype Progress = Progress (Maybe Double) deriving (Eq, Show)
 
@@ -106,4 +117,51 @@ writeProgress user@(AuthenticatedUser (Subscriber _)) worksheet (Progress (Just 
 writeProgress user@(AuthenticatedUser (Subscriber _)) worksheet (Progress Nothing) = do
   throwError $ err500 {errBody = "Cannot remove progress"}
 writeProgress _ _ _ = do
+  throwError err401
+
+compressJSON :: Value -> BL.ByteString
+compressJSON jsonValue = compress . encode $ jsonValue
+
+decompressJSON :: BL.ByteString -> IO (Either String Value)
+decompressJSON compressedData = catch (doDecompressAndParse compressedData) handleErrors
+  where
+    doDecompressAndParse :: BL.ByteString -> IO (Either String Value)
+    doDecompressAndParse data' = do
+      let decompressedData = decompress data'
+      return $ case eitherDecode decompressedData of
+        Left err -> Left $ "JSON parsing error: " ++ err
+        Right val -> Right val
+
+    handleErrors :: SomeException -> IO (Either String Value)
+    handleErrors e = return $ Left $ "Failed to decompress or parse: " ++ show e
+
+readState :: (MonadDB m, MonadError ServerError m, MonadIO m) => User -> Worksheet -> m Value
+readState user@(AuthenticatedUser (Subscriber _)) worksheet = do
+  case userId user of
+    Nothing -> throwError $ err401
+    Just key -> do
+      let field :: BS.ByteString = convert $ worksheetHash worksheet
+      result <- hget ("state:" <> key) field
+      case result of
+        Left _ -> throwError $ err500
+        Right Nothing -> pure $ object []
+        Right (Just p) -> do
+          r <- liftIO $ decompressJSON (fromStrict p)
+          case r of
+            Left _ -> throwError $ err500
+            Right v -> pure v
+readStates _ _ = do
+  throwError $ err401
+
+writeState :: (MonadDB m, MonadError ServerError m) => User -> Worksheet -> Value -> m ()
+writeState user@(AuthenticatedUser (Subscriber _)) worksheet v = do
+  case userId user of
+    Nothing -> throwError err401
+    Just key -> do
+      let field :: BS.ByteString = convert $ worksheetHash worksheet
+      result <- hset ("state:" <> key) field (toStrict $ compressJSON v)
+      case result of
+        Left _ -> throwError $ err500
+        Right _ -> pure ()
+writeState _ _ _ = do
   throwError err401

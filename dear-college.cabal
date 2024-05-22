@@ -33,7 +33,6 @@ executable dear-college
                      , OIDC.Types
                      , Repos
                      , Views.A11y
-                     , Views.Branding
                      , Views.Header
                      , Views.Footer
                      , Views.Page
@@ -45,6 +44,8 @@ executable dear-college
                      , Backend
                      , Model
                      , HttpData
+                     , Hashcash
+                     , JsonWorkProof
   
   -- LANGUAGE extensions used by modules in this package.
   -- other-extensions:
@@ -97,7 +98,8 @@ executable dear-college
                      , cryptonite
                      , monad-time
                      , byteable
-                                          
+                     , zlib
+
   -- Directories containing source files.
   hs-source-dirs:      src
 

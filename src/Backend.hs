@@ -65,6 +65,7 @@ import Text.Blaze.Html5 (ToMarkup, customAttribute, (!))
 import User
 import Views.Page (partialPage)
 import HttpData
+import Hashcash
 
 type CorsHeaders =
   '[ Header "Access-Control-Allow-Origin" Text,
@@ -75,17 +76,78 @@ type CorsHeaders =
 addCorsHeaders :: Maybe URI -> a -> Headers CorsHeaders a
 addCorsHeaders (Just uri) x = do
   let uri' = Text.pack $ uriToString id uri ""
-  addHeader uri' $ addHeader "true" $ addHeader "Authorization, X-Worksheet, Content-Type" x
+  addHeader uri' $ addHeader "true" $ addHeader "Authorization, Worksheet, Content-Type, JSON-Work-Proof" x
 addCorsHeaders Nothing x = do
   addHeader "*" $ addHeader "false" $ addHeader "" x
 
-type ProgressAPI =
+type ProgressAPI = "progress" :> Capture "sha" (Digest SHA256) :>
   ( (Verb 'OPTIONS 200 '[JSON] (Headers ((Header "Access-Control-Allow-Methods" Text) ': CorsHeaders) NoContent))
       :<|> (Get '[JSON] (Headers CorsHeaders Progress))
       :<|> (ReqBody '[JSON] Progress :> Put '[JSON] (Headers CorsHeaders NoContent))
   )
 
-type API = "api" :> "v1" :> "progress" :> Header "Origin" URI :> Header "Authorization" SignedJWT :> Header "X-Worksheet" Text :> Capture "sha" (Digest SHA256) :> ProgressAPI
+type StateAPI = "state" :> Capture "sha" (Digest SHA256) :>
+  ( (Verb 'OPTIONS 200 '[JSON] (Headers ((Header "Access-Control-Allow-Methods" Text) ': CorsHeaders) NoContent))
+      :<|> (Get '[JSON] (Headers CorsHeaders Value))
+      :<|> (Hashcash :> ReqBody '[JSON] Value :> Put '[JSON] (Headers CorsHeaders NoContent))
+  )
+
+type API = "api" :> "v1" :> Header "Origin" URI :> Header "Authorization" SignedJWT :> Header "Worksheet" Text :>
+  ( ProgressAPI :<|> StateAPI )
+
+progressServer ::
+  ( MonadIO m,
+    MonadDB m,
+    MonadTime m,
+    MonadReader r m,
+    HasConfiguration r,
+    MonadRandom m,
+    MonadError ServerError m,
+    HasJwtSettings r,
+    HasUser r
+  ) =>
+  Maybe URI -> Maybe SignedJWT -> Maybe Text -> ServerT ProgressAPI m
+progressServer origin bearer (Just worksheet) sha = do
+  let b = hashWith SHA256 $ encodeUtf8 worksheet
+  let uri = parseURI $ Text.unpack worksheet
+
+  let ws =
+        if (b == sha)
+          then case uri of
+            Just u -> Just $ Worksheet u worksheet b
+            Nothing -> Nothing
+          else Nothing
+
+  optionsHandler origin bearer :<|> getProgress ws origin bearer :<|> putProgress ws origin bearer
+progressServer origin bearer Nothing sha =
+  optionsHandler origin bearer :<|> getProgress Nothing origin bearer :<|> putProgress Nothing origin bearer
+
+stateServer ::
+  ( MonadIO m,
+    MonadDB m,
+    MonadTime m,
+    MonadReader r m,
+    HasConfiguration r,
+    MonadRandom m,
+    MonadError ServerError m,
+    HasJwtSettings r,
+    HasUser r
+  ) =>
+  Maybe URI -> Maybe SignedJWT -> Maybe Text -> ServerT StateAPI m
+stateServer origin bearer (Just worksheet) sha = do
+  let b = hashWith SHA256 $ encodeUtf8 worksheet
+  let uri = parseURI $ Text.unpack worksheet
+
+  let ws =
+        if (b == sha)
+          then case uri of
+            Just u -> Just $ Worksheet u worksheet b
+            Nothing -> Nothing
+          else Nothing
+
+  optionsHandler origin bearer :<|> getState ws origin bearer :<|> putState ws origin bearer
+stateServer origin bearer Nothing sha =
+  optionsHandler origin bearer :<|> getState Nothing origin bearer :<|> putState Nothing origin bearer
 
 server ::
   ( MonadIO m,
@@ -99,22 +161,10 @@ server ::
     HasUser r
   ) =>
   ServerT API m
-server origin bearer (Just worksheet) sha = do
-  let b = hashWith SHA256 $ encodeUtf8 worksheet
-  let uri = parseURI $ Text.unpack worksheet
+server origin bearer worksheet = do
+  (progressServer origin bearer worksheet) :<|> (stateServer origin bearer worksheet)
 
-  let ws =
-        if (b == sha)
-          then case uri of
-            Just u -> Just $ Worksheet u worksheet b
-            Nothing -> Nothing
-          else Nothing
-
-  optionsProgress origin bearer :<|> getProgress ws origin bearer :<|> putProgress ws origin bearer
-server origin bearer Nothing sha =
-  optionsProgress origin bearer :<|> getProgress Nothing origin bearer :<|> putProgress Nothing origin bearer
-
-optionsProgress ::
+optionsHandler ::
   ( MonadIO m,
     MonadDB m,
     MonadReader r m,
@@ -127,9 +177,9 @@ optionsProgress ::
   Maybe URI ->
   Maybe SignedJWT ->
   m (Headers ((Header "Access-Control-Allow-Methods" Text) ': CorsHeaders) NoContent)
-optionsProgress (Just origin) _ = do
+optionsHandler (Just origin) _ = do
   pure $ addHeader "GET, PUT" $ addCorsHeaders (Just origin) $ NoContent
-optionsProgress Nothing _ = do
+optionsHandler Nothing _ = do
   throwError $ err403 {errBody = "CORS requires an Origin header"}
 
 tokenToUser ::
@@ -212,3 +262,47 @@ putProgress (Just worksheet) origin (Just bearer) progress = do
   _ <- writeProgress user worksheet progress
   pure $ addCorsHeaders origin $ NoContent
 putProgress _ _ _ progress = pure $ addCorsHeaders Nothing $ NoContent
+
+getState ::
+  ( MonadIO m,
+    MonadDB m,
+    MonadTime m,
+    MonadReader r m,
+    HasConfiguration r,
+    MonadRandom m,
+    MonadError ServerError m,
+    HasJwtSettings r,
+    HasUser r
+  ) =>
+  Maybe Worksheet ->
+  Maybe URI ->
+  Maybe SignedJWT ->
+  m (Headers CorsHeaders Value)
+getState (Just worksheet) origin (Just bearer) = do
+  user <- tokenToUser bearer worksheet
+  v <- readState user worksheet
+  pure $ addCorsHeaders origin $ v
+getState _ _ _ = do
+  throwError $ err403 {errBody = "Missing fields"}
+
+putState ::
+  ( MonadIO m,
+    MonadDB m,
+    MonadTime m,
+    MonadReader r m,
+    HasConfiguration r,
+    MonadRandom m,
+    MonadError ServerError m,
+    HasJwtSettings r,
+    HasUser r
+  ) =>
+  Maybe Worksheet ->
+  Maybe URI ->
+  Maybe SignedJWT ->
+  Value ->
+  m (Headers CorsHeaders NoContent)
+putState (Just worksheet) origin (Just bearer) state = do
+  user <- tokenToUser bearer worksheet
+  _ <- writeState user worksheet state
+  pure $ addCorsHeaders origin $ NoContent
+putState _ _ _ state = pure $ addCorsHeaders Nothing $ NoContent

@@ -68,7 +68,7 @@ instance (HasServer api context) => HasServer (Hashcash :> api) context where
                  Left e -> delayedFailFatal $ err402 { errBody = fromStrict . encodeUtf8 . pack $ e }
                  Right jwp -> do
                    let pi = rawPathInfo req
-                   v <- liftIO $ verify jwp 10 (decodeUtf8 pi)
+                   v <- liftIO $ verify jwp 16 (decodeUtf8 pi)
                    case v of
                      Left e -> delayedFailFatal $ err402 { errBody = fromStrict . encodeUtf8 . pack $ e }
                      Right () -> pure ()) 

@@ -95,11 +95,11 @@ verify jwp d s = do
   let actualDifficulty = difficulty $ token jwp
   let claimedDifficulty = getDifficulty $ header jwp
   let maybeSubject = getSubject $ payload jwp
-
+  
   if Just s /= maybeSubject then
     pure $ Left "Subject mismatch"
-  else if claimedDifficulty > d then
-    pure $ Left "Claimed difficulty is too high"
+  else if claimedDifficulty < d then
+    pure $ Left "Claimed difficulty is too low"
   else if actualDifficulty < claimedDifficulty then
     pure $ Left "Actual difficulty is too low"
   else if not unexpired then
