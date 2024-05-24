@@ -54,14 +54,19 @@ partialFooter = do
     H.footer ! HA.class_ "py-3 footer mt-auto bg-body-tertiary" $ do
       H.div ! HA.class_ "container" $ do
         H.div ! HA.class_ "row" $ do
-          replicateM_ 2 $ H.div ! HA.class_ "col-6 col-md-3 mb-3" $ do
-            H.h5 "Section"
+          H.div ! HA.class_ "col-6 col-md-3 mb-3" $ do
+            H.h5 "About"
             H.ul ! HA.class_ "nav flex-column" $ do
-              H.li ! HA.class_ "nav-item mb-2" $ H.a ! HA.href "#" ! HA.class_ "nav-link p-0 text-body-secondary" $ "Home"
-              H.li ! HA.class_ "nav-item mb-2" $ H.a ! HA.href "#" ! HA.class_ "nav-link p-0 text-body-secondary" $ "Features"
-              H.li ! HA.class_ "nav-item mb-2" $ H.a ! HA.href "#" ! HA.class_ "nav-link p-0 text-body-secondary" $ "Pricing"
-              H.li ! HA.class_ "nav-item mb-2" $ H.a ! HA.href "#" ! HA.class_ "nav-link p-0 text-body-secondary" $ "FAQs"
-              H.li ! HA.class_ "nav-item mb-2" $ H.a ! HA.href "#" ! HA.class_ "nav-link p-0 text-body-secondary" $ "About"
+              H.li ! HA.class_ "nav-item mb-2" $ H.a ! HA.href "/about/readme" ! HA.class_ "nav-link p-0 text-body-secondary" $ "README"
+              H.li ! HA.class_ "nav-item mb-2" $ H.a ! HA.href "/about/api" ! HA.class_ "nav-link p-0 text-body-secondary" $ "API"
+              H.li ! HA.class_ "nav-item mb-2" $ H.a ! HA.href "https://github.com/dear-college" ! HA.class_ "nav-link p-0 text-body-secondary" $ "GitHub"              
+
+          H.div ! HA.class_ "col-6 col-md-3 mb-3" $ do
+            H.h5 $ H.preEscapedString "Help for&hellip;"
+            H.ul ! HA.class_ "nav flex-column" $ do
+              H.li ! HA.class_ "nav-item mb-2" $ H.a ! HA.href "/help/students" ! HA.class_ "nav-link p-0 text-body-secondary" $ "Students"
+              H.li ! HA.class_ "nav-item mb-2" $ H.a ! HA.href "/help/instructors" ! HA.class_ "nav-link p-0 text-body-secondary" $ "Instructors"
+              H.li ! HA.class_ "nav-item mb-2" $ H.a ! HA.href "/help/authors" ! HA.class_ "nav-link p-0 text-body-secondary" $ "Authors"
 
           H.div ! HA.class_ "col-md-5 offset-md-1 mb-3" $ do
             H.div ! HA.class_ "d-flex flex-column flex-sm-row w-100 gap-2" $ do
