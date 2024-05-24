@@ -41,6 +41,7 @@ import Configuration
     updateJavascriptPath,
     updateRootURI,
     updateStylesheetPath,
+    updateGoogleAnalytics
   )
 import Configuration.Dotenv (defaultConfig, loadFile)
 import Control.Exception (bracket)
@@ -251,12 +252,15 @@ theApplicationWithSettings settings = do
   mCssPath <- findFirstFileWithExtension assetsDirectory ".css"
   let cssFilename = maybe (error "Could not find .css file in assets") takeFileName mCssPath
 
+  google <- lookupEnv "GOOGLE_ANALYTICS"
+
   let config =
         updateRootURI rootURI $
           updateJavascriptPath (Just jsFilename) $
             updateStylesheetPath (Just cssFilename) $
-              defaultConfiguration
-
+              updateGoogleAnalytics google $
+                defaultConfiguration
+  
   putStrLn $ "Listening on port " ++ show (getPort settings)
 
   redisConnectionSocket <- lookupEnv "REDIS_SOCKET"

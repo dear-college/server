@@ -21,6 +21,21 @@ import Configuration
 import Views.Footer (partialFooter)
 import Views.Header (partialHeader)
 
+
+googleAnalytics :: (MonadReader r m, HasConfiguration r) => m H.Html
+googleAnalytics = do
+  config <- asks getConfiguration
+  pure $ case getGoogleAnalytics config of
+    Just id -> do
+        H.script ! HA.async "true" ! HA.src ("https://www.googletagmanager.com/gtag/js?id=" <> (H.toValue $ id)) $ ""
+        H.script $ H.toHtml $ unlines
+          [ "window.dataLayer = window.dataLayer || [];"
+          , "function gtag(){dataLayer.push(arguments);}"
+          , "gtag('js', new Date());"
+          , "gtag('config', '" ++ id ++ "');"
+          ]
+    Nothing -> mempty :: H.Html
+
 partialPage :: (MonadError ServerError m, MonadIO m, MonadDB m, MonadReader r m, HasConfiguration r, HasUser r) => Text -> H.Html -> m H.Html
 partialPage title body = do
   config <- asks getConfiguration
@@ -29,6 +44,7 @@ partialPage title body = do
 
   header <- partialHeader
   footer <- partialFooter
+  analytics <- googleAnalytics
 
   pure $ H.docTypeHtml $ do
     H.html ! HA.lang "en" ! HA.class_ "h-100" $ do
@@ -38,6 +54,7 @@ partialPage title body = do
         H.link ! HA.rel "stylesheet" ! HA.type_ "text/css" ! HA.href ("/" <> cssPath)
         H.script ! HA.type_ "text/javascript" ! HA.src ("/" <> jsPath) $ ""
         H.title $ H.toHtml (title <> " - " <> (pack $ getWebsiteName config))
+        analytics
       H.body ! HA.class_ "d-flex flex-column h-100" $ do
         H.header $ do
           header

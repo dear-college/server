@@ -54,7 +54,7 @@ partialFooter = do
     H.footer ! HA.class_ "py-3 footer mt-auto bg-body-tertiary" $ do
       H.div ! HA.class_ "container" $ do
         H.div ! HA.class_ "row" $ do
-          replicateM_ 3 $ H.div ! HA.class_ "col-6 col-md-2 mb-3" $ do
+          replicateM_ 2 $ H.div ! HA.class_ "col-6 col-md-3 mb-3" $ do
             H.h5 "Section"
             H.ul ! HA.class_ "nav flex-column" $ do
               H.li ! HA.class_ "nav-item mb-2" $ H.a ! HA.href "#" ! HA.class_ "nav-link p-0 text-body-secondary" $ "Home"
@@ -64,13 +64,12 @@ partialFooter = do
               H.li ! HA.class_ "nav-item mb-2" $ H.a ! HA.href "#" ! HA.class_ "nav-link p-0 text-body-secondary" $ "About"
 
           H.div ! HA.class_ "col-md-5 offset-md-1 mb-3" $ do
-            H.form $ do
-              H.h5 "Subscribe to our newsletter"
-              H.p "Monthly digest of what's new and exciting from us."
-              H.div ! HA.class_ "d-flex flex-column flex-sm-row w-100 gap-2" $ do
-                H.label ! HA.for "newsletter1" ! HA.class_ "visually-hidden" $ "Email address"
-                H.input ! HA.type_ "text" ! HA.id "newsletter1" ! HA.class_ "form-control" ! HA.placeholder "Email address"
-                H.button ! HA.class_ "btn btn-primary" ! HA.type_ "button" $ "Subscribe"
+            H.div ! HA.class_ "d-flex flex-column flex-sm-row w-100 gap-2" $ do
+              H.p ! HA.class_ "text-muted" $ do
+                H.html "This website is based upon work supported by the National Science Foundation under NSF "
+                H.a ! HA.href "https://www.nsf.gov/awardsearch/showAward?AWD_ID=1915363" $ "DUE–1915363"
+                H.html ". "
+                H.html "Any opinions, findings, and conclusions or recommendations expressed in this material are those of the author(s) and do not necessarily reflect the views of the National Science Foundation."
 
           H.div ! HA.class_ "d-flex flex-column flex-sm-row justify-content-between pt-4 mt-2 border-top" $ do
             H.p $ do
@@ -81,9 +80,4 @@ partialFooter = do
               H.html "; licensed under the "
               H.a ! HA.href "https://www.gnu.org/licenses/agpl-3.0.txt" $ "GNU Affero General Public License v3.0 or later"
               H.html "."
-          H.div ! HA.class_ "d-flex flex-column flex-sm-row justify-content-between" $ do
-            H.p ! HA.class_ "text-muted" $ do
-              H.html "This website is based upon work supported by the National Science Foundation under NSF "
-              H.a ! HA.href "https://www.nsf.gov/awardsearch/showAward?AWD_ID=1915363" $ "DUE–1915363"
-              H.html ". "
-              H.html "Any opinions, findings, and conclusions or recommendations expressed in this material are those of the author(s) and do not necessarily reflect the views of the National Science Foundation."
+

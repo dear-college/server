@@ -1,19 +1,23 @@
 module Configuration where
 
-import Network.URI (URI (..), uriRegName)
+import Network.URI (URI (..), uriRegName, nullURI)
 
 data Configuration = Configuration
   { getRootURI :: URI,
     getJavascriptPath :: FilePath,
-    getStylesheetPath :: FilePath
+    getStylesheetPath :: FilePath,
+    getGoogleAnalytics :: Maybe String
+    
   }
   deriving (Show)
 
 defaultConfiguration :: Configuration
 defaultConfiguration =
   Configuration
-    { getJavascriptPath = "main.js",
-      getStylesheetPath = "main.css"
+    { getRootURI = nullURI,
+      getJavascriptPath = "main.js",
+      getStylesheetPath = "main.css",
+      getGoogleAnalytics = Nothing
     }
 
 getWebsiteName :: Configuration -> String
@@ -34,3 +38,7 @@ updateJavascriptPath Nothing config = config
 updateStylesheetPath :: Maybe FilePath -> Configuration -> Configuration
 updateStylesheetPath (Just s) config = config {getStylesheetPath = s}
 updateStylesheetPath Nothing config = config
+
+updateGoogleAnalytics :: Maybe String -> Configuration -> Configuration
+updateGoogleAnalytics s config = config {getGoogleAnalytics = s}
+
