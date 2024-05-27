@@ -61,6 +61,7 @@ import User
 
 import Data.Aeson (encode, Value)
 import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString.Char8 as C8
 import Codec.Compression.GZip (compress)
 import Data.Aeson (decode, eitherDecode)
 import Data.ByteString.Lazy as BL
@@ -97,7 +98,7 @@ readProgress user@(AuthenticatedUser (Subscriber _)) worksheet = do
     Nothing -> throwError $ err401
     Just key -> do
       let field :: BS.ByteString = convert $ worksheetHash worksheet
-      result <- zscore key field
+      result <- zscore ("progress:" <> key) field
       case result of
         Left _ -> throwError $ err500
         Right p -> pure $ Progress p
@@ -109,8 +110,9 @@ writeProgress user@(AuthenticatedUser (Subscriber _)) worksheet (Progress (Just 
   case userId user of
     Nothing -> throwError err401
     Just key -> do
+      saveWorksheet worksheet
       let field :: BS.ByteString = convert $ worksheetHash worksheet
-      result <- zadd key p field
+      result <- zadd ("progress:" <> key) p field
       case result of
         Left _ -> throwError $ err500
         Right _ -> pure ()
@@ -158,6 +160,7 @@ writeState user@(AuthenticatedUser (Subscriber _)) worksheet v = do
   case userId user of
     Nothing -> throwError err401
     Just key -> do
+      saveWorksheet worksheet      
       let field :: BS.ByteString = convert $ worksheetHash worksheet
       result <- hset ("state:" <> key) field (toStrict $ compressJSON v)
       case result of
@@ -165,3 +168,13 @@ writeState user@(AuthenticatedUser (Subscriber _)) worksheet v = do
         Right _ -> pure ()
 writeState _ _ _ = do
   throwError err401
+
+saveWorksheet :: (MonadDB m, MonadError ServerError m) => Worksheet -> m ()
+saveWorksheet worksheet = do
+  let key :: BS.ByteString = "url:" <> (convert $ worksheetHash worksheet)
+  let uri = C8.pack $ uriToString id (worksheetUri worksheet) ""
+  result <- rset key uri
+  case result of
+    Left _ -> throwError $ err500
+    Right _ -> pure ()
+
