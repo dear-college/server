@@ -21,7 +21,6 @@ import Configuration
 import Views.Footer (partialFooter)
 import Views.Header (partialHeader)
 
-
 googleAnalytics :: (MonadReader r m, HasConfiguration r) => m H.Html
 googleAnalytics = do
   config <- asks getConfiguration
@@ -39,8 +38,8 @@ googleAnalytics = do
 partialPage :: (MonadError ServerError m, MonadIO m, MonadDB m, MonadReader r m, HasConfiguration r, HasUser r) => Text -> H.Html -> m H.Html
 partialPage title body = do
   config <- asks getConfiguration
-  let jsPath = H.toValue $ getJavascriptPath config
-  let cssPath = H.toValue $ getStylesheetPath config
+  let jsPath = "assets/" <> (H.toValue $ getJavascriptPath config)
+  let cssPath = "assets/" <> (H.toValue $ getStylesheetPath config)
 
   header <- partialHeader
   footer <- partialFooter
@@ -61,4 +60,5 @@ partialPage title body = do
         H.main ! HA.class_ "flex-shrink-0" $ do
           H.div ! HA.class_ "container" $ do
             body
+            H.div ! HA.class_ "my-3" ! HA.id "alerts" $ mempty
         footer

@@ -74,6 +74,7 @@ executable dear-college
                      , servant-blaze
                      , blaze-html
                      , blaze-markup
+                     , blaze-htmx
                      , oidc-client
                      , http-client
                      , http-client-tls

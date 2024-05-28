@@ -119,7 +119,7 @@ ntUser user = local (putUser user)
 proxyCtx :: Proxy '[AuthHandler Request User, R.Connection, SAS.CookieSettings, SAS.JWTSettings]
 proxyCtx = Proxy
 
-type TheAPI = Repos.API :<|> OIDC.API :<|> Markdown.API :<|> Courses.API :<|> Backend.API :<|> Raw
+type TheAPI = Repos.API :<|> OIDC.API :<|> Markdown.API :<|> Courses.API :<|> Backend.API :<|> ("assets" :> Raw)
 
 type TheAuthAPI = AuthJwtCookie :> TheAPI
 

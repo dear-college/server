@@ -78,14 +78,14 @@ partialHeader = do
             H.ul ! HA.class_ "navbar-nav me-auto mb-2 mb-md-0" $ do
               H.li ! HA.class_ "nav-item"
                 $ H.a
-                  ! HA.class_ "nav-link active"
+                  ! HA.class_ "nav-link"
                   ! ariaCurrent "page"
-                  ! HA.href "/"
-                $ "Home"
+                  ! HA.href "/courses"
+                $ "Courses"
               H.li ! HA.class_ "nav-item"
                 $ H.a
                   ! HA.class_ "nav-link"
-                  ! HA.href "#"
-                $ "Link"
+                  ! HA.href "/worksheets"
+                $ "Worksheets"
             H.div ! HA.class_ "d-flex" $ do
               button

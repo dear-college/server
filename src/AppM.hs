@@ -71,6 +71,10 @@ class MonadDB m where
   zscore :: Key -> Field -> m (Either R.Reply (Maybe Double))
   setex :: Key -> Integer -> ByteString -> m (Either R.Reply R.Status)
   setex key _ = rset key
+  sadd :: Key -> [Field] -> m (Either R.Reply Integer)
+  scard :: Key -> m (Either R.Reply Integer)
+  sismember :: Key -> Field -> m (Either R.Reply Bool)
+  smembers :: Key -> m (Either R.Reply [Field])  
 
 newtype AppM a = AppM {runApp :: ReaderT AppCtx Servant.Server.Handler a}
   deriving (Functor, Applicative, MonadReader AppCtx, Monad, MonadIO, MonadError ServerError)
@@ -85,7 +89,11 @@ instance MonadDB AppM where
   rexists key = withConnectionAndRun (R.exists key)
   zadd key double field = withConnectionAndRun (R.zadd key [(double, field)])
   zscore key field = withConnectionAndRun (R.zscore key field)
-
+  sadd key field = withConnectionAndRun (R.sadd key field)
+  scard key = withConnectionAndRun (R.scard key)
+  sismember key field = withConnectionAndRun (R.sismember key field)  
+  smembers key = withConnectionAndRun (R.smembers key)
+  
 withConnectionAndRun :: R.Redis a -> AppM a
 withConnectionAndRun f = AppM $ do
   pool <- asks getPool

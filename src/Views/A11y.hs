@@ -19,3 +19,7 @@ ariaCurrent = customAttribute "aria-current"
 
 ariaDisabled :: H.AttributeValue -> H.Attribute
 ariaDisabled = customAttribute "aria-disabled"
+
+onkeypress :: H.AttributeValue -> H.Attribute
+onkeypress = customAttribute "onkeypress"
+
