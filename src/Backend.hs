@@ -11,7 +11,6 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE ViewPatterns #-}
 
-
 module Backend
   ( API,
     server,
@@ -19,12 +18,11 @@ module Backend
 where
 
 import AppM
-  ( 
+  ( HasConfiguration (..),
     HasJwtSettings (..),
     HasUser (..),
     MonadDB (..),
     MonadTime,
-    HasConfiguration (..),
     getJWK,
     getJwtSettings,
   )
@@ -40,13 +38,13 @@ import qualified Data.Text as Text
 import Data.Text.Encoding (encodeUtf8)
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Encoding as TL
+import Hashcash
+import HttpData ()
 import Model
 import Network.URI (parseURI, uriToString)
 import Servant
 import Servant.Auth.Server.Internal.ConfigTypes
 import User
-import Hashcash
-import HttpData ()
 
 type CorsHeaders =
   '[ Header "Access-Control-Allow-Origin" Text,
@@ -61,20 +59,29 @@ addCorsHeaders (Just url) x = do
 addCorsHeaders Nothing x = do
   addHeader "*" $ addHeader "false" $ addHeader "" x
 
-type ProgressAPI = "progress" :> Capture "sha" (Digest SHA256) :>
-  ( (Verb 'OPTIONS 200 '[JSON] (Headers ((Header "Access-Control-Allow-Methods" Text) ': CorsHeaders) NoContent))
-      :<|> (Get '[JSON] (Headers CorsHeaders Progress))
-      :<|> (ReqBody '[JSON] Progress :> Put '[JSON] (Headers CorsHeaders NoContent))
-  )
+type ProgressAPI =
+  "progress"
+    :> Capture "sha" (Digest SHA256)
+    :> ( (Verb 'OPTIONS 200 '[JSON] (Headers ((Header "Access-Control-Allow-Methods" Text) ': CorsHeaders) NoContent))
+           :<|> (Get '[JSON] (Headers CorsHeaders Progress))
+           :<|> (ReqBody '[JSON] Progress :> Put '[JSON] (Headers CorsHeaders NoContent))
+       )
 
-type StateAPI = "state" :> Capture "sha" (Digest SHA256) :>
-  ( (Verb 'OPTIONS 200 '[JSON] (Headers ((Header "Access-Control-Allow-Methods" Text) ': CorsHeaders) NoContent))
-      :<|> (Get '[JSON] (Headers CorsHeaders Value))
-      :<|> (Hashcash :> ReqBody '[JSON] Value :> Put '[JSON] (Headers CorsHeaders NoContent))
-  )
+type StateAPI =
+  "state"
+    :> Capture "sha" (Digest SHA256)
+    :> ( (Verb 'OPTIONS 200 '[JSON] (Headers ((Header "Access-Control-Allow-Methods" Text) ': CorsHeaders) NoContent))
+           :<|> (Get '[JSON] (Headers CorsHeaders Value))
+           :<|> (Hashcash :> ReqBody '[JSON] Value :> Put '[JSON] (Headers CorsHeaders NoContent))
+       )
 
-type API = "api" :> "v1" :> Header "Origin" URI :> Header "Authorization" SignedJWT :> Header "Worksheet" Text :>
-  ( ProgressAPI :<|> StateAPI )
+type API =
+  "api"
+    :> "v1"
+    :> Header "Origin" URI
+    :> Header "Authorization" SignedJWT
+    :> Header "Worksheet" Text
+    :> (ProgressAPI :<|> StateAPI)
 
 progressServer ::
   ( MonadIO m,
@@ -87,7 +94,10 @@ progressServer ::
     HasJwtSettings r,
     HasUser r
   ) =>
-  Maybe URI -> Maybe SignedJWT -> Maybe Text -> ServerT ProgressAPI m
+  Maybe URI ->
+  Maybe SignedJWT ->
+  Maybe Text ->
+  ServerT ProgressAPI m
 progressServer origin bearer (Just worksheet) sha = do
   let b = hashWith SHA256 $ encodeUtf8 worksheet
   let url = parseURI $ Text.unpack worksheet
@@ -114,7 +124,10 @@ stateServer ::
     HasJwtSettings r,
     HasUser r
   ) =>
-  Maybe URI -> Maybe SignedJWT -> Maybe Text -> ServerT StateAPI m
+  Maybe URI ->
+  Maybe SignedJWT ->
+  Maybe Text ->
+  ServerT StateAPI m
 stateServer origin bearer (Just worksheet) sha = do
   let b = hashWith SHA256 $ encodeUtf8 worksheet
   let url = parseURI $ Text.unpack worksheet

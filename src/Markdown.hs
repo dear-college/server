@@ -16,12 +16,12 @@ module Markdown
 where
 
 import AppM
-  (
-    HasConfiguration (..),
+  ( HasConfiguration (..),
     HasUser (..),
     MonadDB (..),
   )
 import CMark (commonmarkToHtml)
+import Configuration
 import Control.Monad.Except (MonadError)
 import Control.Monad.Reader
 import Data.Maybe
@@ -30,14 +30,12 @@ import qualified Data.Text.IO as TIO
 import Servant
 import Servant.HTML.Blaze
 import System.FilePath ((</>))
+import Text.Blaze.Html5 ((!))
 import qualified Text.Blaze.Html5 as H
 import qualified Text.Blaze.Html5.Attributes as HA
-import Text.Blaze.Html5 ((!))
 import Text.HTML.TagSoup
-import Views.Page (partialPage)
-import Configuration
 import User
-
+import Views.Page (partialPage)
 
 -- Extract text from the first <h1> tag using partitions
 extractH1 :: Text -> Maybe Text
@@ -45,19 +43,24 @@ extractH1 html = case partitions (isTagOpenName "h1") (parseTags html) of
   [] -> Nothing
   (x : _) -> Just (innerText $ takeWhile (not . isTagCloseName "h1") x)
 
-type API = (Get '[HTML] H.Html) :<|>
-  ("about" :>
-   (("readme" :> (Get '[HTML] H.Html)) :<|>
-    ("api" :> (Get '[HTML] H.Html)))) :<|>
-  ("help" :>
-   (("instructors" :> (Get '[HTML] H.Html)) :<|>
-    ("authors" :> (Get '[HTML] H.Html)) :<|>
-    ("students" :> (Get '[HTML] H.Html))))
+type API =
+  (Get '[HTML] H.Html)
+    :<|> ( "about"
+             :> ( ("readme" :> (Get '[HTML] H.Html))
+                    :<|> ("api" :> (Get '[HTML] H.Html))
+                )
+         )
+    :<|> ( "help"
+             :> ( ("instructors" :> (Get '[HTML] H.Html))
+                    :<|> ("authors" :> (Get '[HTML] H.Html))
+                    :<|> ("students" :> (Get '[HTML] H.Html))
+                )
+         )
 
 landingPage :: (MonadError ServerError m, MonadIO m, MonadDB m, MonadReader r m, HasConfiguration r, HasUser r) => m H.Html
 landingPage = do
   websiteName <- asks (getWebsiteName . getConfiguration)
- 
+
   user <- asks getUser
   bigButton <- case user of
     AuthenticatedUser _ -> pure $ do
@@ -103,8 +106,10 @@ server ::
   ) =>
   FilePath ->
   ServerT API m
-server root = landingPage
-                :<|> (render (root </> "README.md") :<|> render (root </> "API.md"))
-                :<|> ((render (root </> "getting-started/for-instructors.md")) :<|>
-                      (render (root </> "getting-started/for-authors.md")) :<|>
-                      (render (root </> "getting-started/for-students.md")))
+server root =
+  landingPage
+    :<|> (render (root </> "README.md") :<|> render (root </> "API.md"))
+    :<|> ( (render (root </> "getting-started/for-instructors.md"))
+             :<|> (render (root </> "getting-started/for-authors.md"))
+             :<|> (render (root </> "getting-started/for-students.md"))
+         )

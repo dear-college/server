@@ -13,19 +13,14 @@ module Views.Footer
   )
 where
 
-
+import AppM (HasConfiguration (..), MonadDB (..))
 import Control.Monad.Except (MonadError)
 import Control.Monad.Reader
-
 import Data.Time
-
 import Servant
-
-import qualified Text.Blaze.Html5 as H
 import Text.Blaze.Html5 ((!))
+import qualified Text.Blaze.Html5 as H
 import qualified Text.Blaze.Html5.Attributes as HA
-
-import AppM (HasConfiguration(..), MonadDB(..))
 
 getCurrentYear :: IO Integer
 getCurrentYear = do
@@ -70,4 +65,3 @@ partialFooter = do
               H.html "; licensed under the "
               H.a ! HA.href "https://www.gnu.org/licenses/agpl-3.0.txt" $ "GNU Affero General Public License v3.0 or later"
               H.html "."
-

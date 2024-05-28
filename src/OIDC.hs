@@ -14,10 +14,8 @@
 
 module OIDC (API, server) where
 
-
 import AppM
-  ( 
-    HasConfiguration (..),
+  ( HasConfiguration (..),
     HasCookieSettings (..),
     HasJwtSettings (..),
     HasOidcEnvironment (..),
@@ -33,13 +31,11 @@ import Crypto.JWT
 import Data.Aeson (FromJSON (..), ToJSON (..), (.:))
 import qualified Data.Aeson as JSON
 import qualified Data.Aeson.Types as AeT
-import qualified Data.ByteString.Lazy as LBS
 import qualified Data.ByteString.Char8 as C8
-
+import qualified Data.ByteString.Lazy as LBS
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import qualified Data.Text
-
 import Data.Time.Clock (UTCTime, addUTCTime, getCurrentTime)
 import GHC.Generics
 import Network.URI
@@ -98,7 +94,8 @@ handleLogin ::
     MonadError ServerError m,
     MonadCatch m
   ) =>
-  Maybe URI -> m NoContent
+  Maybe URI ->
+  m NoContent
 handleLogin uri = do
   oidcenv <- asks getOidcEnvironment
   let conf = oidcConf oidcenv
@@ -115,7 +112,7 @@ handleLogin uri = do
   _ <- case uri' of
     Just u -> rset ("redirect:" <> state) u *> expire state 300 *> pure ()
     Nothing -> pure ()
-  
+
   redirects (show loc)
   return NoContent
 
@@ -243,7 +240,7 @@ handleLoggedIn err mcode mstate = do
   let root' :: C8.ByteString = C8.pack $ uriToString id root ""
   referer <- rget ("redirect:" <> state) >>= return . either (const Nothing) id
   let referer' = fromMaybe root' referer
-  
+
   case err of
     Just errorMsg -> forbidden errorMsg
     Nothing -> do
@@ -261,7 +258,7 @@ handleLoggedIn err mcode mstate = do
                 applySessionCookieSettings cookieSettings $
                   applyCookieSettings cookieSettings $
                     def {setCookieValue = LBS.toStrict bs}
-          throwError $ err302 {errHeaders = [("Location", referer'), ("Set-Cookie", renderSetCookieBS cookie)]}                    
+          throwError $ err302 {errHeaders = [("Location", referer'), ("Set-Cookie", renderSetCookieBS cookie)]}
           return $ (addHeader cookie) NoContent
 
 instance ToMarkup User where

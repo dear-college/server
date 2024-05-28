@@ -117,4 +117,3 @@ toolClaims audience expiry (Subscriber subscriber) target = do
           & claimAud ?~ Audience [audience']
           & claimExp ?~ NumericDate expiry
   pure $ ToolClaims claims [target']
-

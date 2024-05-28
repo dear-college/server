@@ -16,7 +16,6 @@ import Network.Wai.Handler.Warp
     setLogger,
     setPort,
   )
-  
 import Network.Wai.Logger (withStdoutLogger)
 import System.Directory (doesFileExist)
 import System.Environment (lookupEnv)

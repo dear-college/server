@@ -11,22 +11,19 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE ViewPatterns #-}
 
-module HttpData
-where
+module HttpData where
 
 import Control.Lens
 import Crypto.JWT
-import Data.ByteArray.Encoding (Base(Base16), convertFromBase)
+import Data.ByteArray.Encoding (Base (Base16), convertFromBase)
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as LBS
-import qualified Data.Text as Text
 import Data.Text (Text, unpack)
+import qualified Data.Text as Text
 import Data.Text.Encoding (encodeUtf8)
-
 import Network.URI (parseURI)
 import Servant
-
-import qualified Data.ByteString.Char8 as C8
 
 instance FromHttpApiData C8.ByteString where
   parseUrlPiece = Right . C8.pack . Data.Text.unpack
@@ -38,12 +35,11 @@ instance (HashAlgorithm a) => FromHttpApiData (Digest a) where
     let bs = encodeUtf8 piece
     case convertFromBase Base16 bs of
       Left err -> Left $ Text.pack err
-      Right (b :: BS.ByteString)  -> maybe (Left "Could not convert byte string to digest") Right (digestFromByteString b)
+      Right (b :: BS.ByteString) -> maybe (Left "Could not convert byte string to digest") Right (digestFromByteString b)
 
 instance FromHttpApiData URI where
   parseUrlPiece piece =
     maybe (Left "Could not parse URI") Right (parseURI $ unpack piece)
-
 
 instance AsError Text where
   _Error = prism' embed match

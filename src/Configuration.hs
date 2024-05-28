@@ -1,6 +1,6 @@
 module Configuration where
 
-import Network.URI (URI (..), uriRegName, nullURI)
+import Network.URI (URI (..), nullURI, uriRegName)
 
 data Configuration = Configuration
   { getRootURI :: URI,
@@ -21,10 +21,10 @@ defaultConfiguration =
 
 getWebsiteName :: Configuration -> String
 getWebsiteName config =
-  let root = getRootURI config in
-  case uriAuthority root of
-    Just auth -> uriRegName auth
-    Nothing -> show root
+  let root = getRootURI config
+   in case uriAuthority root of
+        Just auth -> uriRegName auth
+        Nothing -> show root
 
 updateRootURI :: Maybe URI -> Configuration -> Configuration
 updateRootURI (Just s) config = config {getRootURI = s}
@@ -40,4 +40,3 @@ updateStylesheetPath Nothing config = config
 
 updateGoogleAnalytics :: Maybe String -> Configuration -> Configuration
 updateGoogleAnalytics s config = config {getGoogleAnalytics = s}
-

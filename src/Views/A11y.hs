@@ -2,8 +2,8 @@
 
 module Views.A11y where
 
-import qualified Text.Blaze.Html5 as H
 import Text.Blaze.Html5 (customAttribute)
+import qualified Text.Blaze.Html5 as H
 
 ariaControls :: H.AttributeValue -> H.Attribute
 ariaControls = customAttribute "aria-controls"
@@ -22,5 +22,3 @@ ariaDisabled = customAttribute "aria-disabled"
 
 onkeypress :: H.AttributeValue -> H.Attribute
 onkeypress = customAttribute "onkeypress"
-
-

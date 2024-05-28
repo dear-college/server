@@ -29,14 +29,11 @@ import AppM
     MonadTime (..),
   )
 import qualified Backend
-import qualified Data.Maybe
 import Configuration
 import Control.Lens
-
 import Control.Monad.Catch
 import Control.Monad.Except (MonadError)
 import Control.Monad.Reader
-
 import qualified Courses
 import qualified Crypto.JOSE.JWK as Jose
 import Crypto.JOSE.Types (Base64Octets (..))
@@ -47,6 +44,7 @@ import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy.UTF8 as LazyByteString
 import Data.ByteString.UTF8 (ByteString)
 import qualified Data.ByteString.UTF8 as ByteString
+import qualified Data.Maybe
 import Data.Pool (defaultPoolConfig, newPool, withResource)
 import qualified Database.Redis as R
 import FindFile (findFirstFileWithExtension)
@@ -54,9 +52,9 @@ import qualified Markdown
 import Network.URI (parseURI)
 import Network.Wai (Request (..), requestHeaders)
 import Network.Wai.Handler.Warp
-  (     Settings,
-        getPort
-      )
+  ( Settings,
+    getPort,
+  )
 import qualified OIDC
 import OIDC.Types (OIDCConf (..), initOIDC)
 import Servant
@@ -103,11 +101,12 @@ server ::
   FilePath ->
   FilePath ->
   ServerT TheAuthAPI m
-server assetPath markdownPath user = hoistServerWithContext
-  (Proxy :: Proxy TheAPI)
-  proxyCtx
-  (ntUser user)
-  $ OIDC.server :<|> (Markdown.server markdownPath) :<|> Courses.server :<|> Backend.server :<|> serveDirectoryWebApp assetPath
+server assetPath markdownPath user =
+  hoistServerWithContext
+    (Proxy :: Proxy TheAPI)
+    proxyCtx
+    (ntUser user)
+    $ OIDC.server :<|> (Markdown.server markdownPath) :<|> Courses.server :<|> Backend.server :<|> serveDirectoryWebApp assetPath
 
 -- https://nicolasurquiola.ar/blog/2023-10-28-generalised-auth-with-jwt-in-servant
 type AuthJwtCookie = AuthProtect "jwt-cookie"

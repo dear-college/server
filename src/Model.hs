@@ -23,28 +23,26 @@ module Model
     addInstructor,
     courseExists,
     coursesForUser,
-    isInstructor
+    isInstructor,
   )
 where
 
 import AppM (MonadDB (..))
+import Codec.Compression.GZip (compress, decompress)
+import Control.Exception (SomeException, catch)
 import Control.Monad.Except (MonadError)
 import Control.Monad.Reader
 import Crypto.Hash
+import Data.Aeson
 import Data.ByteArray
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as C8
+import Data.ByteString.Lazy as BL
 import Data.Text (Text)
-import Data.Text.Encoding (encodeUtf8, decodeUtf8)
+import Data.Text.Encoding (decodeUtf8, encodeUtf8)
 import Network.URI (uriToString)
 import Servant
 import User
-
-import Data.Aeson
-import qualified Data.ByteString.Char8 as C8
-import Codec.Compression.GZip (compress)
-import Data.ByteString.Lazy as BL
-import Codec.Compression.GZip (decompress)
-import Control.Exception (catch, SomeException)
 
 newtype Progress = Progress (Maybe Double) deriving (Eq, Show)
 
@@ -132,7 +130,6 @@ readState user@(AuthenticatedUser (Subscriber _)) worksheet = do
         Right (Just p) -> do
           r <- liftIO $ decompressJSON (fromStrict p)
           handleResult r
-
 readState _ _ = do
   throwError $ err401
 
@@ -145,7 +142,6 @@ writeState user@(AuthenticatedUser (Subscriber _)) worksheet v = do
       let field :: BS.ByteString = convert $ worksheetHash worksheet
       result <- hset ("state:" <> key) field (toStrict $ compressJSON v)
       ignoreResult result
-
 writeState _ _ _ = do
   throwError err401
 

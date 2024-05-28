@@ -10,19 +10,16 @@
 
 module Views.Header (partialHeader) where
 
+import AppM (HasConfiguration (..), HasUser (..), MonadDB (..))
+import Configuration
 import Control.Monad.Except (MonadError)
 import Control.Monad.Reader
-
 import Network.URI (uriToString)
 import Servant
-
-import qualified Text.Blaze.Html5 as H
 import Text.Blaze.Html5 ((!))
+import qualified Text.Blaze.Html5 as H
 import qualified Text.Blaze.Html5.Attributes as HA
-
-import AppM (HasConfiguration(..), HasUser(..), MonadDB(..))
 import User
-import Configuration
 import Views.A11y
 
 loginButton :: (MonadError ServerError m, MonadIO m, MonadDB m, MonadReader r m, HasConfiguration r, HasUser r) => m H.Html
