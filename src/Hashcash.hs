@@ -14,25 +14,20 @@
 module Hashcash (Hashcash) where
 
 import Servant
-import Servant.Server
+
 import Servant.Server.Internal
 import Data.Typeable
 
-import Network.Wai (Request, requestHeaders, rawPathInfo)
-import Control.Monad (unless)
+import Network.Wai (requestHeaders, rawPathInfo)
 
-import Data.Time.Clock.POSIX
 import           Control.Monad.IO.Class      (liftIO)
 
 import Data.Text.Encoding (encodeUtf8)
 import Data.Text (pack)
 import Data.ByteString.Lazy (fromStrict)
-import Data.ByteString (ByteString)
 import Data.Text.Encoding (decodeUtf8)
 
 import JsonWorkProof
-
-paymentRequired = err402 { errBody = "Invalid or missing JSON work proof" }
 
 -- I am very thankful for
 -- https://www.williamyaoh.com/posts/2023-02-28-writing-servant-combinators.html
@@ -67,8 +62,8 @@ instance (HasServer api context) => HasServer (Hashcash :> api) context where
                case eitherJwp of
                  Left e -> delayedFailFatal $ err402 { errBody = fromStrict . encodeUtf8 . pack $ e }
                  Right jwp -> do
-                   let pi = rawPathInfo req
-                   v <- liftIO $ verify jwp 16 (decodeUtf8 pi)
+                   let path = rawPathInfo req
+                   v <- liftIO $ verify jwp 16 (decodeUtf8 path)
                    case v of
                      Left e -> delayedFailFatal $ err402 { errBody = fromStrict . encodeUtf8 . pack $ e }
                      Right () -> pure ()) 

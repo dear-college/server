@@ -10,3 +10,4 @@ findFirstFileWithExtension dir ext = do
   allPaths <- listDirectory dir
   let files = map (dir </>) allPaths
   return $ find ((== ext) . takeExtension) files
+

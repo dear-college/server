@@ -31,7 +31,6 @@ executable dear-college
                      , AppM
                      , OIDC
                      , OIDC.Types
-                     , Repos
                      , Views.A11y
                      , Views.Header
                      , Views.Footer

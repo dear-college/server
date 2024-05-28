@@ -18,34 +18,27 @@ import Crypto.JWT
     ClaimsSet,
     HasClaimsSet (..),
     NumericDate (..),
-    StringOrURI (..),
     emptyClaimsSet,
     stringOrUri,
   )
 import Data.Aeson
 import qualified Data.Aeson.KeyMap as M
 import qualified Data.Aeson.Types as AeT
-import Data.Function ((&))
-import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import qualified Data.Text
 import qualified Data.Text as Text
-import Data.Text.Encoding (encodeUtf8)
-import Data.Time.Clock (UTCTime, addUTCTime, getCurrentTime)
+import Data.Time.Clock (UTCTime)
 import GHC.Generics (Generic)
 import Network.URI
   ( parseURI,
     parseURIReference,
     relativeTo,
-    uriPath,
     uriToString,
   )
 import Servant
 import Servant.Auth.Server as SAS
-import Servant.Server
 import User (Subscriber (..))
-import Web.OIDC.Client.Tokens (IdTokenClaims (..), Tokens (..), validateIdToken)
-import Web.OIDC.Client.Types (Code, SessionStore (..), State)
+import Web.OIDC.Client.Tokens (IdTokenClaims (..), Tokens (..))
 
 stripPathFromURI :: URI -> Maybe Text
 stripPathFromURI uri = do
@@ -83,7 +76,6 @@ instance HasClaimsSet SessionClaims where
 
 sessionClaims :: URI -> Tokens OtherClaims -> Maybe SessionClaims
 sessionClaims uri tokens = do
-  let claims = otherClaims $ idToken tokens
   issuer <- parseURI $ Data.Text.unpack $ iss $ idToken tokens
   subscriber <- parseURIReference $ Data.Text.unpack $ sub $ idToken tokens
   let subAndIss = subscriber `relativeTo` issuer
@@ -115,13 +107,14 @@ instance ToJSON ToolClaims where
       ins _ _ a = a
 
 toolClaims :: URI -> UTCTime -> Subscriber -> URI -> Maybe ToolClaims
-toolClaims audience expiry (Subscriber sub) target = do
+toolClaims audience expiry (Subscriber subscriber) target = do
   target' <- stripPathFromURI target
-  audience <- preview stringOrUri $ uriToString id audience ""
-  sub' <- preview stringOrUri $ uriToString id sub ""
+  audience' <- preview stringOrUri $ uriToString id audience ""
+  subscriber' <- preview stringOrUri $ uriToString id subscriber ""
   let claims =
         emptyClaimsSet
-          & claimSub ?~ sub'
-          & claimAud ?~ Audience [audience]
+          & claimSub ?~ subscriber'
+          & claimAud ?~ Audience [audience']
           & claimExp ?~ NumericDate expiry
   pure $ ToolClaims claims [target']
+

@@ -28,3 +28,4 @@ userId :: User -> Maybe BS.ByteString
 userId (AuthenticatedUser (Subscriber s)) = do
   Just $ BSU.fromString $ uriToString id s ""
 userId _ = Nothing
+

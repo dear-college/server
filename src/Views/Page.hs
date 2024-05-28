@@ -16,22 +16,23 @@ import qualified Text.Blaze.Html5 as H
 import Text.Blaze.Html5 ((!))
 import qualified Text.Blaze.Html5.Attributes as HA
 
-import AppM (AppM, HasConfiguration(..), HasUser(..), MonadDB(..))
+import AppM (HasConfiguration(..), HasUser(..), MonadDB(..))
 import Configuration
 import Views.Footer (partialFooter)
 import Views.Header (partialHeader)
+
 
 googleAnalytics :: (MonadReader r m, HasConfiguration r) => m H.Html
 googleAnalytics = do
   config <- asks getConfiguration
   pure $ case getGoogleAnalytics config of
-    Just id -> do
-        H.script ! HA.async "true" ! HA.src ("https://www.googletagmanager.com/gtag/js?id=" <> (H.toValue $ id)) $ ""
+    Just i -> do
+        H.script ! HA.async "true" ! HA.src ("https://www.googletagmanager.com/gtag/js?id=" <> H.toValue i) $ ""
         H.script $ H.toHtml $ unlines
           [ "window.dataLayer = window.dataLayer || [];"
           , "function gtag(){dataLayer.push(arguments);}"
           , "gtag('js', new Date());"
-          , "gtag('config', '" ++ id ++ "');"
+          , "gtag('config', '" ++ i ++ "');"
           ]
     Nothing -> mempty :: H.Html
 

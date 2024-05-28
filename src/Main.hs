@@ -1,11 +1,9 @@
-{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeOperators #-}
 
 module Main (main) where
 
@@ -14,20 +12,19 @@ import Configuration.Dotenv (defaultConfig, loadFile)
 import Control.Monad (when)
 import Network.Wai.Handler.Warp
   ( defaultSettings,
-    getPort,
     runSettings,
     setLogger,
     setPort,
   )
+  
 import Network.Wai.Logger (withStdoutLogger)
 import System.Directory (doesFileExist)
 import System.Environment (lookupEnv)
 
 main :: IO ()
 main = do
-  -- with this, lookupEnv will fetch from .env or from an environment variable
   fileExists <- doesFileExist ".env"
-  _ <- when fileExists $ Configuration.Dotenv.loadFile Configuration.Dotenv.defaultConfig
+  when fileExists $ Configuration.Dotenv.loadFile Configuration.Dotenv.defaultConfig
 
   port <- lookupEnv "PORT"
   let settings = maybe id (setPort . read) port defaultSettings

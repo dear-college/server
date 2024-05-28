@@ -27,53 +27,24 @@ module Model
   )
 where
 
-import AppM
-  ( AppM,
-    HasConfiguration (..),
-    HasJwtSettings (..),
-    HasUser (..),
-    MonadDB (..),
-    MonadTime,
-    getConfiguration,
-    getJWK,
-    getJwtSettings,
-  )
-import Auth
-import Configuration
-import Control.Applicative
-import Control.Monad.Except (MonadError, liftEither, runExceptT, throwError)
-import Control.Monad.IO.Class (liftIO)
+import AppM (MonadDB (..))
+import Control.Monad.Except (MonadError)
 import Control.Monad.Reader
 import Crypto.Hash
-import Crypto.JWT
-import Data.Aeson
-import Data.Aeson.Types (Parser)
 import Data.ByteArray
 import qualified Data.ByteString as BS
-import Data.ByteString.Char8 (pack)
-import Data.List (break)
-import Data.Maybe (fromMaybe)
-import Data.Pool (withResource)
 import Data.Text (Text)
 import Data.Text.Encoding (encodeUtf8, decodeUtf8)
-import Data.Time.Clock (UTCTime, addUTCTime, getCurrentTime)
-import GHC.Generics
-import Network.URI (URI, parseURI, uriToString)
+import Network.URI (uriToString)
 import Servant
-import Servant.HTML.Blaze
-import Servant.Server
-import Text.Blaze.Html5 (ToMarkup, customAttribute, (!))
 import User
 
-import Data.Aeson (encode, Value)
-import qualified Data.ByteString.Lazy as BL
+import Data.Aeson
 import qualified Data.ByteString.Char8 as C8
 import Codec.Compression.GZip (compress)
-import Data.Aeson (decode, eitherDecode)
 import Data.ByteString.Lazy as BL
 import Codec.Compression.GZip (decompress)
-import Control.Exception (catch, SomeException, throwIO)
-import Control.Monad (unless)
+import Control.Exception (catch, SomeException)
 
 newtype Progress = Progress (Maybe Double) deriving (Eq, Show)
 
@@ -127,7 +98,7 @@ writeProgress user@(AuthenticatedUser (Subscriber _)) worksheet (Progress (Just 
       let field :: BS.ByteString = convert $ worksheetHash worksheet
       result <- zadd ("progress:" <> key) p field
       ignoreResult result
-writeProgress user@(AuthenticatedUser (Subscriber _)) worksheet (Progress Nothing) = do
+writeProgress (AuthenticatedUser (Subscriber _)) _ (Progress Nothing) = do
   throwError $ err500 {errBody = "Cannot remove progress"}
 writeProgress _ _ _ = do
   throwError err401
@@ -162,7 +133,7 @@ readState user@(AuthenticatedUser (Subscriber _)) worksheet = do
           r <- liftIO $ decompressJSON (fromStrict p)
           handleResult r
 
-readStates _ _ = do
+readState _ _ = do
   throwError $ err401
 
 writeState :: (MonadDB m, MonadError ServerError m) => User -> Worksheet -> Value -> m ()
@@ -201,9 +172,9 @@ addInstructor user (Slug text) = do
     Nothing -> throwError err401
     Just key -> do
       let slug' :: BS.ByteString = encodeUtf8 text
-      result <- sadd ("courses:instructors:" <> slug') [key]
-      result <- sadd ("instructors:courses:" <> key) [slug']
-      result <- sadd ("users:courses:" <> key) [slug']
+      _ <- sadd ("courses:instructors:" <> slug') [key]
+      _ <- sadd ("instructors:courses:" <> key) [slug']
+      _ <- sadd ("users:courses:" <> key) [slug']
       result <- sadd ("courses:users:" <> slug') [key]
       ignoreResult result
 

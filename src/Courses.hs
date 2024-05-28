@@ -16,9 +16,9 @@ module Courses
   )
 where
 
+
 import AppM
-  ( AppM,
-    HasConfiguration (..),
+  ( HasConfiguration (..),
     HasJwtSettings (..),
     HasUser (..),
     MonadDB (..),
@@ -28,33 +28,23 @@ import AppM
   )
 import Auth
 import Configuration
-import Control.Applicative
 import Control.Lens
-import Control.Monad (replicateM_)
-import Control.Monad.Except (MonadError, liftEither, runExceptT, throwError)
-import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader
+import Control.Monad.Except (MonadError)
 import Crypto.JWT
-import Data.Aeson
-import Data.Aeson.Types (Parser)
-import Data.ByteString.Char8 (pack)
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy.Char8 as CL8
-import Data.List (break)
-import Data.Maybe
-import Data.Pool (withResource)
 import Data.Text (Text)
 import qualified Data.Text as Text
-import Data.Time.Clock (UTCTime, addUTCTime, getCurrentTime)
-import Network.URI (URI, parseURI, uriToString)
+import Data.Time.Clock (addUTCTime, getCurrentTime)
+import Network.URI (parseURI, uriToString)
 import Servant
 import Servant.HTML.Blaze
-import Servant.Server
-import Text.Blaze.Html5 (ToMarkup, customAttribute, (!))
 import qualified Text.Blaze.Html5 as H
 import qualified Text.Blaze.Html5.Attributes as HA
 import qualified Views.A11y as HA
 import qualified Text.Blaze.Htmx as HA
+import Text.Blaze.Html5 ((!))
 import User
 import Views.Page (partialPage)
 import Model

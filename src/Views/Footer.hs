@@ -13,34 +13,19 @@ module Views.Footer
   )
 where
 
-import Control.Applicative
-import Control.Monad (replicateM_)
-import Control.Monad.Except (MonadError, liftEither, runExceptT, throwError)
-import Control.Monad.IO.Class (liftIO)
+
+import Control.Monad.Except (MonadError)
 import Control.Monad.Reader
 
-import Data.Aeson
-import Data.Aeson.Types (Parser)
-import Data.ByteString.Char8 (pack)
-import Data.List (break)
-import Data.Maybe
-import Data.Pool (withResource)
-import Data.Text (Text)
 import Data.Time
-import Data.Time.Calendar
 
-import Network.URI (uriToString)
 import Servant
-import Servant.HTML.Blaze
-import Servant.Server
 
 import qualified Text.Blaze.Html5 as H
-import Text.Blaze.Html5 (ToMarkup, customAttribute, (!))
+import Text.Blaze.Html5 ((!))
 import qualified Text.Blaze.Html5.Attributes as HA
 
-import AppM (AppM, HasConfiguration(..), MonadDB(..), getConfiguration, getPool)
-import Configuration
-import Views.A11y
+import AppM (HasConfiguration(..), MonadDB(..))
 
 getCurrentYear :: IO Integer
 getCurrentYear = do
@@ -59,7 +44,7 @@ partialFooter = do
             H.ul ! HA.class_ "nav flex-column" $ do
               H.li ! HA.class_ "nav-item mb-2" $ H.a ! HA.href "/about/readme" ! HA.class_ "nav-link p-0 text-body-secondary" $ "README"
               H.li ! HA.class_ "nav-item mb-2" $ H.a ! HA.href "/about/api" ! HA.class_ "nav-link p-0 text-body-secondary" $ "API"
-              H.li ! HA.class_ "nav-item mb-2" $ H.a ! HA.href "https://github.com/dear-college" ! HA.class_ "nav-link p-0 text-body-secondary" $ "GitHub"              
+              H.li ! HA.class_ "nav-item mb-2" $ H.a ! HA.href "https://github.com/dear-college" ! HA.class_ "nav-link p-0 text-body-secondary" $ "GitHub"
 
           H.div ! HA.class_ "col-6 col-md-3 mb-3" $ do
             H.h5 $ H.preEscapedString "Help for&hellip;"

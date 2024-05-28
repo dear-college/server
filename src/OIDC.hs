@@ -12,24 +12,22 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 
-module OIDC (API (..), server) where
+module OIDC (API, server) where
+
 
 import AppM
-  ( AppM,
+  ( 
     HasConfiguration (..),
     HasCookieSettings (..),
     HasJwtSettings (..),
     HasOidcEnvironment (..),
     MonadDB (..),
     getConfiguration,
-    getPool,
   )
 import Configuration (getRootURI)
 import Control.Lens
 import Control.Monad.Catch
-import Control.Monad.Error.Lens (throwing, throwing_)
-import Control.Monad.Except (MonadError, liftEither, runExceptT, throwError)
-import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Except (MonadError)
 import Control.Monad.Reader
 import Crypto.JWT
 import Data.Aeson (FromJSON (..), ToJSON (..), (.:))
@@ -37,20 +35,17 @@ import qualified Data.Aeson as JSON
 import qualified Data.Aeson.Types as AeT
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.ByteString.Char8 as C8
-import Data.Function ((&))
+
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import qualified Data.Text
-import Data.Text.Encoding (encodeUtf8)
+
 import Data.Time.Clock (UTCTime, addUTCTime, getCurrentTime)
 import GHC.Generics
-import Network.HTTP.Client (Manager, newManager)
-import Network.HTTP.Client.TLS (tlsManagerSettings)
 import Network.URI
   ( parseURI,
     parseURIReference,
     relativeTo,
-    uriPath,
     uriToString,
   )
 import OIDC.Types (OIDCConf (..), OIDCEnv (..), genRandomBS)
@@ -59,19 +54,17 @@ import Servant.Auth.Server as SAS
 import Servant.Auth.Server.Internal.Cookie
   ( applyCookieSettings,
     applySessionCookieSettings,
-    makeSessionCookie,
   )
 import Servant.HTML.Blaze (HTML)
-import Servant.Server
 import Text.Blaze (ToMarkup (..))
 import qualified Text.Blaze.Html as H
-import Text.Blaze.Html5 (ToMarkup, (!))
+import Text.Blaze.Html5 ((!))
 import qualified Text.Blaze.Html5 as H
 import qualified Text.Blaze.Html5.Attributes as HA
 import Text.Blaze.Renderer.Utf8 (renderMarkup)
 import Web.Cookie
 import qualified Web.OIDC.Client as O
-import Web.OIDC.Client.Tokens (IdTokenClaims (..), Tokens (..), validateIdToken)
+import Web.OIDC.Client.Tokens (IdTokenClaims (..), Tokens (..))
 import Web.OIDC.Client.Types (Code, SessionStore (..), State)
 
 type API =
@@ -150,10 +143,8 @@ instance JSON.ToJSON AuthInfo where
         "name" JSON..= (n :: Text)
       ]
 
-type LoginHandler = AuthInfo -> IO (Either Text User)
-
 loginHandler :: AuthInfo -> IO (Either Text User)
-loginHandler au = do
+loginHandler _ = do
   return $ Right $ User "id" "secret" "storage" (Just "url")
 
 data User = User
@@ -195,7 +186,6 @@ instance HasClaimsSet SessionClaims where
 
 sessionClaims :: URI -> Tokens OtherClaims -> UTCTime -> Maybe SessionClaims
 sessionClaims uri tokens expiry = do
-  let claims = otherClaims $ idToken tokens
   issuer <- parseURI $ Data.Text.unpack $ iss $ idToken tokens
   subscriber <- parseURIReference $ Data.Text.unpack $ sub $ idToken tokens
   let subAndIss = subscriber `relativeTo` issuer
@@ -228,8 +218,6 @@ handleLoggedIn ::
     MonadError ServerError m,
     MonadCatch m
   ) =>
-  -- | handle successful id
-  LoginHandler ->
   -- | error
   Maybe Text ->
   -- | code
@@ -237,10 +225,9 @@ handleLoggedIn ::
   -- | state
   Maybe State ->
   m (Headers '[Header "Set-Cookie" SetCookie] NoContent)
-handleLoggedIn handleSuccessfulId err mcode mstate = do
+handleLoggedIn err mcode mstate = do
   oidcenv <- asks getOidcEnvironment
-  jwtSettings <- asks getJwtSettings
-  jwk <- asks getJWK
+  key <- asks getJWK
   cookieSettings <- asks getCookieSettings
   state <- maybe (forbidden "Missing state") pure mstate
   code <- maybe (forbidden "Missing code") pure mcode
@@ -266,9 +253,9 @@ handleLoggedIn handleSuccessfulId err mcode mstate = do
         Nothing -> forbidden "Missing JWT"
         Just claims -> do
           liftIO $ print claims
-          bestAlg <- bestJWSAlg jwk
+          bestAlg <- bestJWSAlg key
           let bestHeader = newJWSHeader ((), bestAlg)
-          mJWT <- signJWT jwk bestHeader claims
+          mJWT <- signJWT key bestHeader claims
           let bs = encodeCompact mJWT
           let cookie =
                 applySessionCookieSettings cookieSettings $
@@ -332,7 +319,7 @@ server ::
     MonadCatch m
   ) =>
   ServerT API m
-server = (handleLogin :<|> (handleLoggedIn loginHandler)) :<|> handleLogout
+server = (handleLogin :<|> handleLoggedIn) :<|> handleLogout
 
 ----------------------------------------------------------------
 

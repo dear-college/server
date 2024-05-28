@@ -24,26 +24,20 @@ module AppM
   )
 where
 
+
 import Configuration (Configuration (..))
 import Control.Monad.Catch (MonadCatch, MonadThrow (..), catch)
 import Control.Monad.Except
-import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Reader
-import Control.Monad.State
 import Control.Monad.Time
-import Control.Monad.Trans.Reader (ReaderT, runReaderT)
 import Crypto.JOSE
-import Crypto.Random.Types (MonadRandom)
 import Data.ByteString
-import Data.Map (Map)
 import Data.Pool (Pool, withResource)
 import qualified Database.Redis as R
-import Network.Wai.Handler.Warp
 import OIDC.Types (OIDCEnv (..))
 import Servant.Auth.Server
 import Servant.Server
 import User
-import Web.OIDC.Client.Types (SessionStore)
 
 data AppCtx = AppCtx
   { _getConfiguration :: Configuration,

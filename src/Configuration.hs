@@ -7,7 +7,6 @@ data Configuration = Configuration
     getJavascriptPath :: FilePath,
     getStylesheetPath :: FilePath,
     getGoogleAnalytics :: Maybe String
-    
   }
   deriving (Show)
 

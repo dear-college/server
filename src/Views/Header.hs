@@ -10,37 +10,20 @@
 
 module Views.Header (partialHeader) where
 
-import Control.Applicative
-import Control.Monad (replicateM_)
-import Control.Monad.Except (MonadError, liftEither, runExceptT, throwError)
-import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Except (MonadError)
 import Control.Monad.Reader
-
-import Data.Aeson
-import Data.Aeson.Types (Parser)
-import Data.ByteString.Char8 (pack)
-import Data.List (break)
-import Data.Maybe
-import Data.Pool (withResource)
-import Data.Text (Text)
 
 import Network.URI (uriToString)
 import Servant
-import Servant.HTML.Blaze
-import Servant.Server
 
 import qualified Text.Blaze.Html5 as H
-import Text.Blaze.Html5 (ToMarkup, customAttribute, (!))
+import Text.Blaze.Html5 ((!))
 import qualified Text.Blaze.Html5.Attributes as HA
 
-import AppM
-    (AppM, HasConfiguration(..), HasUser(..), MonadDB(..), getConfiguration,
-     getPool)
-import Configuration
+import AppM (HasConfiguration(..), HasUser(..), MonadDB(..))
 import User
+import Configuration
 import Views.A11y
-
-xlinkHref = customAttribute "xlink:href"
 
 loginButton :: (MonadError ServerError m, MonadIO m, MonadDB m, MonadReader r m, HasConfiguration r, HasUser r) => m H.Html
 loginButton = do

@@ -11,22 +11,10 @@
 
 module OIDC.Types (genRandomBS, OIDCEnv (..), OIDCConf (..), initOIDC) where
 
-import Control.Monad.Except
-import Control.Monad.IO.Class (liftIO)
-import Data.Aeson
-  ( FromJSON (..),
-    (.:),
-  )
-import qualified Data.Aeson as JSON
-import qualified Data.Aeson.Types as AeT
+
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as C8
-import qualified Data.ByteString.Lazy as LBS
-import Data.Function ((&))
-import Data.Maybe (fromMaybe)
-import Data.Text (Text)
-import qualified Data.Text
-import GHC.Generics
+
 import Network.HTTP.Client
   ( Manager,
     newManager,
@@ -34,24 +22,7 @@ import Network.HTTP.Client
 import Network.HTTP.Client.TLS
   ( tlsManagerSettings,
   )
-import Servant
-import Servant.HTML.Blaze
-  ( HTML,
-  )
-import Servant.Server
 import qualified System.Random as Random
-import Text.Blaze
-  ( ToMarkup (..),
-  )
-import qualified Text.Blaze.Html as H
-import Text.Blaze.Html5
-  ( (!),
-  )
-import qualified Text.Blaze.Html5 as H
-import qualified Text.Blaze.Html5.Attributes as HA
-import Text.Blaze.Renderer.Utf8
-  ( renderMarkup,
-  )
 import qualified Web.OIDC.Client as O
 
 genRandomBS :: IO BS.ByteString

@@ -11,6 +11,7 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE ViewPatterns #-}
 
+
 module Backend
   ( API,
     server,
@@ -18,54 +19,34 @@ module Backend
 where
 
 import AppM
-  ( AppM,
-    HasConfiguration (..),
+  ( 
     HasJwtSettings (..),
     HasUser (..),
     MonadDB (..),
     MonadTime,
-    getConfiguration,
+    HasConfiguration (..),
     getJWK,
     getJwtSettings,
   )
 import Auth
-import Configuration
-import Control.Applicative
 import Control.Lens
-import Control.Monad (replicateM_)
-import Control.Monad.Except (MonadError, liftEither, runExceptT, throwError)
-import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Except (MonadError)
 import Control.Monad.Reader
-import Crypto.Hash (Digest, SHA256, digestFromByteString)
 import Crypto.JWT
 import Data.Aeson
-import Data.Aeson.Types (Parser)
-import Data.ByteArray.Encoding (Base (Base16), convertFromBase, convertToBase)
-import qualified Data.ByteString as BS
-import Data.ByteString.Char8 (pack)
-import qualified Data.ByteString.Lazy as LBS
-import Data.List (break)
 import Data.Maybe
-import Data.Pool (withResource)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Data.Text.Encoding (encodeUtf8)
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Encoding as TL
-import qualified Data.Text.Lazy.IO as TL
-import Data.Time.Clock (UTCTime, addUTCTime, getCurrentTime)
-import GHC.Generics
 import Model
-import Network.URI (URI, parseURI, uriToString)
+import Network.URI (parseURI, uriToString)
 import Servant
 import Servant.Auth.Server.Internal.ConfigTypes
-import Servant.HTML.Blaze
-import Servant.Server
-import Text.Blaze.Html5 (ToMarkup, customAttribute, (!))
 import User
-import Views.Page (partialPage)
-import HttpData
 import Hashcash
+import HttpData ()
 
 type CorsHeaders =
   '[ Header "Access-Control-Allow-Origin" Text,
@@ -74,9 +55,9 @@ type CorsHeaders =
    ]
 
 addCorsHeaders :: Maybe URI -> a -> Headers CorsHeaders a
-addCorsHeaders (Just uri) x = do
-  let uri' = Text.pack $ uriToString id uri ""
-  addHeader uri' $ addHeader "true" $ addHeader "Authorization, Worksheet, Content-Type, JSON-Work-Proof" x
+addCorsHeaders (Just url) x = do
+  let url' = Text.pack $ uriToString id url ""
+  addHeader url' $ addHeader "true" $ addHeader "Authorization, Worksheet, Content-Type, JSON-Work-Proof" x
 addCorsHeaders Nothing x = do
   addHeader "*" $ addHeader "false" $ addHeader "" x
 
@@ -109,17 +90,17 @@ progressServer ::
   Maybe URI -> Maybe SignedJWT -> Maybe Text -> ServerT ProgressAPI m
 progressServer origin bearer (Just worksheet) sha = do
   let b = hashWith SHA256 $ encodeUtf8 worksheet
-  let uri = parseURI $ Text.unpack worksheet
+  let url = parseURI $ Text.unpack worksheet
 
   let ws =
         if (b == sha)
-          then case uri of
+          then case url of
             Just u -> Just $ Worksheet u worksheet b
             Nothing -> Nothing
           else Nothing
 
   optionsHandler origin bearer :<|> getProgress ws origin bearer :<|> putProgress ws origin bearer
-progressServer origin bearer Nothing sha =
+progressServer origin bearer Nothing _ =
   optionsHandler origin bearer :<|> getProgress Nothing origin bearer :<|> putProgress Nothing origin bearer
 
 stateServer ::
@@ -136,17 +117,17 @@ stateServer ::
   Maybe URI -> Maybe SignedJWT -> Maybe Text -> ServerT StateAPI m
 stateServer origin bearer (Just worksheet) sha = do
   let b = hashWith SHA256 $ encodeUtf8 worksheet
-  let uri = parseURI $ Text.unpack worksheet
+  let url = parseURI $ Text.unpack worksheet
 
   let ws =
         if (b == sha)
-          then case uri of
+          then case url of
             Just u -> Just $ Worksheet u worksheet b
             Nothing -> Nothing
           else Nothing
 
   optionsHandler origin bearer :<|> getState ws origin bearer :<|> putState ws origin bearer
-stateServer origin bearer Nothing sha =
+stateServer origin bearer Nothing _ =
   optionsHandler origin bearer :<|> getState Nothing origin bearer :<|> putState Nothing origin bearer
 
 server ::
@@ -197,11 +178,11 @@ tokenToUser ::
   Worksheet ->
   m User
 tokenToUser bearer worksheet = do
-  jwk <- asks getJWK
+  key <- asks getJWK
   settings <- jwtSettingsToJwtValidationSettings <$> asks getJwtSettings
 
   r <- runJOSE @JWTError $ do
-    (tc :: ToolClaims) <- verifyJWT settings jwk bearer
+    (tc :: ToolClaims) <- verifyJWT settings key bearer
     pure tc
 
   case r of
@@ -261,7 +242,7 @@ putProgress (Just worksheet) origin (Just bearer) progress = do
   user <- tokenToUser bearer worksheet
   _ <- writeProgress user worksheet progress
   pure $ addCorsHeaders origin $ NoContent
-putProgress _ _ _ progress = pure $ addCorsHeaders Nothing $ NoContent
+putProgress _ _ _ _ = pure $ addCorsHeaders Nothing $ NoContent
 
 getState ::
   ( MonadIO m,
@@ -305,4 +286,4 @@ putState (Just worksheet) origin (Just bearer) state = do
   user <- tokenToUser bearer worksheet
   _ <- writeState user worksheet state
   pure $ addCorsHeaders origin $ NoContent
-putState _ _ _ state = pure $ addCorsHeaders Nothing $ NoContent
+putState _ _ _ _ = pure $ addCorsHeaders Nothing $ NoContent

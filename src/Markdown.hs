@@ -38,6 +38,7 @@ import Views.Page (partialPage)
 import Configuration
 import User
 
+
 -- Extract text from the first <h1> tag using partitions
 extractH1 :: Text -> Maybe Text
 extractH1 html = case partitions (isTagOpenName "h1") (parseTags html) of

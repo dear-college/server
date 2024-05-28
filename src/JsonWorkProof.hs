@@ -8,12 +8,11 @@ import qualified Data.ByteString.Base64 as B64
 import qualified Data.ByteString.Internal as BSI
 import qualified Data.ByteString as BS
 import Crypto.Hash
-import Data.Data
 import Data.ByteArray
 import Data.Bits
 import Data.Time.Clock
 import Data.Time.Clock.POSIX
-import Data.Fixed
+
 
 maybeToRight :: b -> Maybe a -> Either b a
 maybeToRight _ (Just x) = Right x
@@ -33,9 +32,9 @@ instance FromJSON Header where
     parseJSON _ = pure $ Header { getJwpType = "", getAlgorithm = "", getDifficulty = 0 }
 
 instance ToJSON Header where
-    toJSON (Header jwpType algorithm difficulty) = object ["typ" .= jwpType,
-                                                           "alg" .= algorithm,
-                                                           "dif" .= difficulty]
+    toJSON (Header jwpType algorithm d) = object ["typ" .= jwpType,
+                                                   "alg" .= algorithm,
+                                                   "dif" .= d]
     
 data Payload = Payload { getExpiration :: Double
                        , getSubject :: !(Maybe Text)
@@ -49,13 +48,13 @@ instance FromJSON Payload where
     parseJSON _ = pure $ Payload { getExpiration = 0 , getSubject = Nothing, getAudience = Nothing }
 
 instance ToJSON Payload where
-    toJSON (Payload exp sub aud) = object ["exp" .= exp, "sub" .= sub, "aud" .= aud]
+    toJSON (Payload expiry subscriber audience) = object ["exp" .= expiry, "sub" .= subscriber, "aud" .= audience]
 
 data JWP = JWP { header :: Header,
                  payload :: Payload,
                  token :: BS.ByteString }
            deriving Show
-    
+
 decodeJWP :: BS.ByteString -> Either String JWP
 decodeJWP b = do
   let splitted = BS.split (BSI.c2w '.') b
@@ -63,18 +62,18 @@ decodeJWP b = do
   h <- case splitted of
     (h:_:_) -> Right $ B64.decodeLenient h
     _ -> Left "A JSON work proof must have three components and a header"
-  h <- maybeToRight "Could not parse JWP header" $ decodeStrict h
+  h' <- maybeToRight "Could not parse JWP header" $ decodeStrict h
   
   p <- case splitted of
     (_:p:_) -> Right $ B64.decodeLenient p
     _ -> Left "A JSON work proof must have three components and a header"
-  p <- maybeToRight "Could not parse JWP payload" $ decodeStrict p
+  p' <- maybeToRight "Could not parse JWP payload" $ decodeStrict p
 
-  pure JWP { header = h, payload = p, token = b }
+  pure JWP { header = h', payload = p', token = b }
 
 countZeros :: BS.ByteString -> Int
 countZeros bs = sum $ takeWhile (> 0) $ map countLeadingZeros $ BS.unpack bs
-  
+
 difficulty :: BS.ByteString -> Int
 difficulty b =
   let hashed = hashWith SHA256 b

@@ -18,6 +18,7 @@ let
     cabal-install 
     haskellPackages.ghcid
     haskell-language-server
+    #haskellPackages.haskell-language-server
     hlint
   ];
 
