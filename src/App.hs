@@ -49,6 +49,7 @@ import Data.Pool (defaultPoolConfig, newPool, withResource)
 import qualified Database.Redis as R
 import FindFile (findFirstFileWithExtension)
 import qualified Markdown
+import qualified Favicon
 import Network.URI (parseURI)
 import Network.Wai (Request (..), requestHeaders)
 import Network.Wai.Handler.Warp
@@ -77,7 +78,7 @@ ntUser user = local (putUser user)
 proxyCtx :: Proxy '[AuthHandler Request User, R.Connection, SAS.CookieSettings, SAS.JWTSettings]
 proxyCtx = Proxy
 
-type TheAPI = OIDC.API :<|> Markdown.API :<|> Courses.API :<|> Backend.API :<|> ("assets" :> Raw)
+type TheAPI = OIDC.API :<|> Markdown.API :<|> Courses.API :<|> Backend.API :<|> Favicon.API :<|> ("assets" :> Raw) 
 
 type TheAuthAPI = AuthJwtCookie :> TheAPI
 
@@ -100,13 +101,14 @@ server ::
   ) =>
   FilePath ->
   FilePath ->
+  FilePath ->
   ServerT TheAuthAPI m
-server assetPath markdownPath user =
+server assetPath markdownPath faviconPath user =
   hoistServerWithContext
     (Proxy :: Proxy TheAPI)
     proxyCtx
     (ntUser user)
-    $ OIDC.server :<|> (Markdown.server markdownPath) :<|> Courses.server :<|> Backend.server :<|> serveDirectoryWebApp assetPath
+    $ OIDC.server :<|> (Markdown.server markdownPath) :<|> Courses.server :<|> Backend.server :<|> (Favicon.server faviconPath) :<|> serveDirectoryWebApp assetPath
 
 -- https://nicolasurquiola.ar/blog/2023-10-28-generalised-auth-with-jwt-in-servant
 type AuthJwtCookie = AuthProtect "jwt-cookie"
@@ -148,8 +150,8 @@ type instance AuthServerData AuthJwtCookie = User
 nt :: AppCtx -> AppM a -> Servant.Server.Handler a
 nt s x = runReaderT (runApp x) s
 
-appWithContext :: FilePath -> FilePath -> AppCtx -> IO Application
-appWithContext assetPath markdownPath ctx = do
+appWithContext :: FilePath -> FilePath -> FilePath -> AppCtx -> IO Application
+appWithContext assetPath markdownPath faviconPath ctx = do
   let pool = getPool ctx
       myKey = _getSymmetricJWK ctx
       jwtCfg = SAS.defaultJWTSettings myKey
@@ -164,7 +166,7 @@ appWithContext assetPath markdownPath ctx = do
           api
           proxyCtx
           (nt ctx')
-          (server assetPath markdownPath)
+          (server assetPath markdownPath faviconPath)
 
 -- | Generate a key suitable for use with 'defaultConfig' using file contents
 generateKeyFromFile :: String -> IO JWK
@@ -196,6 +198,9 @@ theApplicationWithSettings settings = do
   markdownPath <- lookupEnv "MARKDOWN_PATH"
   let markdownDirectory = Data.Maybe.fromMaybe (error "Missing MARKDOWN_PATH in .env") markdownPath
 
+  faviconPath <- lookupEnv "FAVICON_PATH"
+  let faviconDirectory = Data.Maybe.fromMaybe (error "Missing FAVICON_PATH in .env") faviconPath
+  
   mJsPath <- findFirstFileWithExtension assetsDirectory ".js"
   let jsFilename = maybe (error "Could not find .js file in assets") takeFileName mJsPath
 
@@ -239,4 +244,4 @@ theApplicationWithSettings settings = do
             _getOidcEnvironment = oidcEnv
           }
 
-  appWithContext assetsDirectory markdownDirectory context
+  appWithContext assetsDirectory markdownDirectory faviconDirectory context

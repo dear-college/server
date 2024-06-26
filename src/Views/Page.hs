@@ -19,7 +19,8 @@ import qualified Text.Blaze.Html5 as H
 import qualified Text.Blaze.Html5.Attributes as HA
 import Views.Footer (partialFooter)
 import Views.Header (partialHeader)
-
+import qualified Favicon
+  
 googleAnalytics :: (MonadReader r m, HasConfiguration r) => m H.Html
 googleAnalytics = do
   config <- asks getConfiguration
@@ -45,7 +46,8 @@ partialPage title body = do
   header <- partialHeader
   footer <- partialFooter
   analytics <- googleAnalytics
-
+  favicon <- Favicon.header
+  
   pure $ H.docTypeHtml $ do
     H.html ! HA.lang "en" ! HA.class_ "h-100" $ do
       H.head $ do
@@ -54,6 +56,7 @@ partialPage title body = do
         H.link ! HA.rel "stylesheet" ! HA.type_ "text/css" ! HA.href ("/" <> cssPath)
         H.script ! HA.type_ "text/javascript" ! HA.src ("/" <> jsPath) $ ""
         H.title $ H.toHtml (title <> " - " <> (pack $ getWebsiteName config))
+        favicon
         analytics
       H.body ! HA.class_ "d-flex flex-column h-100" $ do
         H.header $ do

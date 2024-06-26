@@ -45,6 +45,7 @@ executable dear-college
                      , HttpData
                      , Hashcash
                      , JsonWorkProof
+                     , Favicon
   
   -- LANGUAGE extensions used by modules in this package.
   -- other-extensions:
@@ -99,6 +100,7 @@ executable dear-college
                      , monad-time
                      , byteable
                      , zlib
+                     , wai-app-static
 
   -- Directories containing source files.
   hs-source-dirs:      src
